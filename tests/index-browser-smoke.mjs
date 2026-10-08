@@ -88,8 +88,20 @@ try {
     return { headers, body: JSON.stringify({ id: 1 }) };
   } });
   const { command, evaluate, waitFor } = browser;
+  if (remoteBase) {
+    // Chrome's public-site -> loopback restriction applies to this fixture,
+    // not to TorBox's public CDN. Grant only in this disposable test profile.
+    const { product } = await command('Browser.getVersion');
+    const major = Number(/Chrome\/(\d+)/.exec(product)?.[1] || 0);
+    if (major >= 138) await command('Browser.setPermission', { permission: { name: major >= 146 ? 'loopback-network' : 'local-network-access' },
+      setting: 'granted', origin: new URL(base).origin });
+  }
   await command('Fetch.enable', { patterns: [{ urlPattern: 'https://api.github.com/*' }] });
   await command('Page.navigate', { url: base }); await waitFor('!!document.querySelector("#view h1")');
+  if (remoteBase && process.env.UBR_INDEX_DEBUG) {
+    console.log('Fixture permission states:', await evaluate(`Promise.all(['local-network-access','loopback-network','local-network'].map(async name=>{try{return {name,state:(await navigator.permissions.query({name})).state};}catch(error){return {name,error:error.message};}}))`));
+    console.log('Page fixture probe:', await evaluate(`fetch(${JSON.stringify(fileUrl)},{headers:{Range:'bytes=0-99'}}).then(async response=>({status:response.status,range:response.headers.get('content-range'),length:(await response.arrayBuffer()).byteLength})).catch(error=>({name:error.name,error:error.message}))`));
+  }
   await evaluate(`import('${base}js/db.js').then(db => db.setSetting('catalogMode','static'))`);
   await evaluate('location.hash = "#/settings"');
   await waitFor('!!document.querySelector(\'input[aria-label="GitHub session token"]\')');
