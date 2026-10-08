@@ -4,6 +4,8 @@ import { resolve, extname, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { openAnnaStore } from './anna-store.mjs';
 import { importAnna } from './import-anna.mjs';
+import { parseComikey, parseWebtoon } from './public-catalogs.mjs';
+import { searchRecords } from '../js/sources/catalog-search.js';
 
 export const APP_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -85,6 +87,16 @@ export function createCatalogApi(store, { fetchImpl = fetch } = {}) {
       return store.search(text, { offset: number(params, 'offset', 0, 0, Number.MAX_SAFE_INTEGER), type });
     }
     if (path === 'mangadex/search') return upstream(mangaDexSearchUrl(text, number(params, 'offset', 0, 0, 9970)));
+    if (['comikey/search', 'webtoon/search'].includes(path)) {
+      const offset = number(params, 'offset', 0, 0, 100000);
+      const url = path === 'comikey/search' ? `https://comikey.com/comics/?${new URLSearchParams({ q: text, page: Math.floor(offset / 30) + 1 })}`
+        : 'https://www.webtoons.com/en/originals';
+      const response = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
+      if (!response.ok) fail(`The public catalog returned HTTP ${response.status}.`, 502);
+      const html = await response.text();
+      if (path === 'comikey/search') { const result = parseComikey(html); return { items: result.items, next: result.next ? offset + 30 : null }; }
+      return searchRecords(parseWebtoon(html).items, text, { offset });
+    }
     const feed = /^mangadex\/manga\/([^/]+)\/chapters$/.exec(path);
     if (feed) {
       if (!UUID.test(feed[1])) fail('Invalid MangaDex manga ID.');
@@ -137,7 +149,7 @@ export function createCatalogServer({ store, appRoot = APP_ROOT, origins = [], f
       if (!['GET', 'HEAD'].includes(request.method)) return sendJson(405, { error: 'Method not allowed.' });
       const relative = decodeURIComponent(url.pathname).replace(/^\//, '') || 'index.html';
       const isShell = ['index.html', 'sw.js', 'manifest.webmanifest'].includes(relative);
-      if ((!isShell && !/^(js|css|icons|vendor)\//.test(relative)) || relative.split('/').some((part) => part.startsWith('.'))) return sendJson(404, { error: 'Not found.' });
+      if ((!isShell && !/^(js|css|icons|vendor|catalog)\//.test(relative)) || relative.split('/').some((part) => part.startsWith('.'))) return sendJson(404, { error: 'Not found.' });
       const path = resolve(appRoot, relative);
       if (!path.startsWith(resolve(appRoot) + sep)) return sendJson(404, { error: 'Not found.' });
       const bytes = await readFile(path);

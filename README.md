@@ -6,9 +6,35 @@ A personal library and reader for books, comics and manga, with multiple catalog
 | --- | --- |
 | Books | Imported Anna’s Archive metadata, Project Gutenberg, your files |
 | Comics | Imported Anna’s Archive comic metadata, Internet Archive, your files |
-| Manga | MangaDex chapters, MangaUpdates scanlation releases, your files |
+| Manga | MangaDex, MangaUpdates scanlation releases, Comikey, WEBTOON, TorBox, your files |
 
-Catalog entries can be saved alongside imported files in your Library. MangaDex chapters open in the built-in reader with source and scanlation-group credits. MangaUpdates provides release tracking and group links, not chapter files. Each section remembers your selected catalog.
+Catalog entries can be saved alongside imported files in your Library. Each section remembers your selected catalog. Comikey and WEBTOON open their official readers; chapter access may include free previews and paid unlocks. MangaUpdates tracks releases and credited groups, not chapter files. Batcave is an external link only: automated catalog access is blocked and its backend has not been connected.
+
+## Hosted static app
+
+Site: <https://jayeshpaluru.github.io/unified-book-registry/>
+
+The hosted app does not need a localhost server. GitHub Actions builds browser-searchable public catalog snapshots and deploys an explicitly allowlisted static artifact to Pages. Catalogs refresh daily and on main-branch updates. A checked-in public metadata snapshot provides a fallback if a provider is temporarily unavailable. Coverage and freshness are shown in Settings; these snapshots are not entire provider databases.
+
+Your imported books, reading progress and library live in this browser’s IndexedDB. They are not uploaded to GitHub, TorBox or another server. Metadata backups do not contain imported file blobs, separately imported Anna metadata, OPDS passwords or credential settings.
+
+### Live catalogs and TorBox authentication
+
+`TORBOX_API_KEY` is stored only as a GitHub Actions repository secret, never in the site. TorBox does not currently permit direct browser API calls from this Pages origin. Live MangaDex/MangaUpdates requests and private TorBox operations therefore run as on-demand Actions jobs, without a separately deployed backend.
+
+1. Create a **fine-grained GitHub token** scoped to this repository, with **Actions: read/write** and **Contents: read**.
+2. In **Settings → Live catalogs and TorBox**, connect that token as the repository owner. Do not enter the TorBox key in the app.
+3. Use the **TorBox** tab in Books, Comics or Manga to load your private files, generate a fresh download link, or import a compatible file into the local reader. Use **Search full provider live** for manga searches beyond the static snapshot.
+
+The GitHub token stays only in memory and is forgotten when the tab reloads. Each request creates a non-exportable RSA-OAEP private key in the browser. Jobs encrypt responses using AES-256-GCM and wrap the AES key with that session’s public key. Only ciphertext is committed to the `runtime-results` branch; no private account responses or download links are logged or published in the site. Generated response files are bounded to 50 and one day of retention; encrypted history can remain in Git. Result contents expire after 45 minutes. Keep repository write access restricted to trusted people.
+
+Expect workflow startup time, usually 20–60 seconds; this is a batch-job runtime, not a low-latency API. Expired file links must be regenerated. Browser imports are capped at 200 MB in the TorBox UI; larger files should be downloaded and imported manually. File-server browser restrictions may also require manual import. CBR/RAR must be converted to CBZ. TorBox cache retention is not permanent storage; use AirLock where available and retain independent backups.
+
+### Anna’s Archive status
+
+The Anna catalog is **not populated with the complete shadow-library database**. The verified TorBox connection contained no combined aarecord metadata files. The full official derived metadata torrent is much larger than a Pages site; Pages can publish at most 1 GB. A complete mirrored search index needs separate storage, rather than hiding a partial mirror behind a claim of full coverage.
+
+The static app supports streaming **local browser imports** of combined aarecord/Elasticsearch JSON, JSONL/NDJSON and gzip. Metadata stays on that device. Official line-delimited `aarecords__N.json.gz` files are recognized despite their `.json` extension. Zstandard and raw SQL/AAC conversion require the local CLI. No Anna search page crawling, protected download endpoints or book-file mirroring is performed.
 
 ## Run locally
 
@@ -19,7 +45,7 @@ cd /Users/jsp/code/unified-book-registry
 npm start
 ```
 
-Open <http://127.0.0.1:8787>. This serves both the app and its local catalog API. The service is required for Anna’s Archive searches, MangaDex and MangaUpdates; it keeps Anna’s metadata in `data/anna.sqlite` and forwards the manga providers’ JSON API requests. MangaDex page images load from its image servers.
+Open <http://127.0.0.1:8787>. Localhost defaults to the optional companion API, keeping Anna’s metadata in `data/anna.sqlite` and forwarding the manga providers’ JSON API requests. MangaDex page images load from its image servers. To test the hosted mode locally, choose **Static catalog + GitHub Actions** in Settings.
 
 If you serve the app separately, set **Settings → Catalog service URL** to the running service’s address. The static app and imported-file readers still work without the companion service. The service binds to loopback by default and has no authentication; do not expose it publicly.
 
@@ -63,6 +89,11 @@ Change the preferred MangaDex translation language in Settings or the chapter li
 ```sh
 npm test
 npm run test:browser
+npm run sync:catalog
+npm run build
+npm run test:site
 ```
 
-The browser smoke test uses a detected Chromium browser (or `UBR_BROWSER_PATH`), an isolated browser profile, temporary data and mocked manga APIs. It covers catalog browsing, chapter reading, scanlation credits, metadata upload, library backup/restore and the offline app shell. It does not change your library or catalog.
+The browser tests use Chromium (or `UBR_BROWSER_PATH`) and isolated profiles. `test:browser` covers the companion mode and reader. `test:site` tests the real static artifact at a nested Pages path, metadata imports, library migration, credential-safe backups, public provider tabs and mocked encrypted TorBox jobs. Set `UBR_SITE_URL` to test the actual deployed site. None of these tests changes your personal library or catalog.
+
+Deployment uses `.github/workflows/pages.yml`. The read-only TorBox authentication and official metadata-cache checks are separate manual workflows. `node tools/runtime-smoke.mjs` uses authenticated `gh` CLI access to verify an actual encrypted TorBox list round trip without printing private file names or links. `node tools/save-catalog-snapshot.mjs` updates the checked-in public fallback after a successful catalog build.

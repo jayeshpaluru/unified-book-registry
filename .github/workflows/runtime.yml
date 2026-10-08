@@ -1,0 +1,40 @@
+name: Private runtime request
+run-name: Runtime ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        required: true
+        type: string
+      path:
+        required: true
+        type: string
+      params:
+        required: true
+        type: string
+      public_key:
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: runtime-results
+  cancel-in-progress: false
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Process request and encrypt the response for the browser session
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TORBOX_API_KEY: ${{ secrets.TORBOX_API_KEY }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          REQUEST_PATH: ${{ inputs.path }}
+          REQUEST_PARAMS: ${{ inputs.params }}
+          SESSION_PUBLIC_KEY: ${{ inputs.public_key }}
+        run: node tools/runtime-job.mjs

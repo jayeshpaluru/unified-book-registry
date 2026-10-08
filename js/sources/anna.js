@@ -1,4 +1,4 @@
-import { catalogRequest } from './catalog-api.js';
+import { catalogRequest, catalogMode } from './catalog-api.js';
 export const ANNA_ORIGIN = 'https://annas-archive.pk';
 const strings = (value) => (Array.isArray(value) ? value : value == null ? [] : [value])
   .filter((v) => typeof v === 'string' || typeof v === 'number').map(String).filter(Boolean);
@@ -33,6 +33,9 @@ export function mapRecord(document) {
 }
 export const search = (text, offset = 0, type) => catalogRequest('anna/search', { q: text, offset, type });
 export const status = () => catalogRequest('health');
-export const importMetadata = (file) => catalogRequest('anna/import', { filename: file.name }, {
-  method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' },
-});
+export async function importMetadata(file) {
+  if (await catalogMode() === 'static') return (await import('./browser-metadata.js')).importBrowserMetadata(file);
+  return catalogRequest('anna/import', { filename: file.name }, {
+    method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' },
+  });
+}

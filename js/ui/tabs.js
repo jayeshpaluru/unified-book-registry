@@ -6,6 +6,7 @@ import * as gutendex from '../sources/gutendex.js';
 import { iaItem, ensureItem } from '../items.js';
 import { renderLibrary } from './library.js';
 import { mountSourceTabs, mountCatalogBrowse } from './catalog-view.js';
+import { mountTorboxBrowse } from './torbox-view.js';
 
 function renderArchiveComics(view) {
   return mountBrowse(view, {
@@ -75,6 +76,7 @@ export function renderBooks(view, openSheet) {
   return mountSourceTabs(view, {
     anna: { name: 'Anna’s Archive', mount: (host) => mountCatalogBrowse(host, 'anna', { title: 'Books', type: 'book' }) },
     gutenberg: { name: 'Gutenberg', mount: (host) => renderGutenberg(host, openSheet) },
+    torbox: { name: 'TorBox', mount: (host) => mountTorboxBrowse(host, 'book') },
     local: { name: 'Your books', mount: (host) => renderLibrary(host, { fixedType: 'book' }) },
   }, 'anna', 'booksCatalog');
 }
@@ -83,6 +85,11 @@ export function renderComics(view) {
   return mountSourceTabs(view, {
     anna: { name: 'Anna’s Archive', mount: (host) => mountCatalogBrowse(host, 'anna', { title: 'Comics', type: 'comic' }) },
     archive: { name: 'Internet Archive', mount: renderArchiveComics },
+    batcave: { name: 'Batcave', mount: (host) => {
+      host.replaceChildren(h('h1', {}, 'Batcave'), h('p', { class: 'muted' }, 'Batcave blocks automated catalog access. Its backend is not connected; open its own comics reader below.'),
+        h('a', { class: 'btn', href: 'https://batcave.biz/comix/', target: '_blank', rel: 'noopener noreferrer' }, 'Open Batcave comics ↗'));
+    } },
+    torbox: { name: 'TorBox', mount: (host) => mountTorboxBrowse(host, 'comic') },
     local: { name: 'Your comics', mount: (host) => renderLibrary(host, { fixedType: 'comic' }) },
   }, 'anna', 'comicsCatalog');
 }
@@ -91,6 +98,9 @@ export function renderManga(view) {
   return mountSourceTabs(view, {
     mangadex: { name: 'MangaDex', mount: (host) => mountCatalogBrowse(host, 'mangadex', { title: 'Manga' }) },
     mangaupdates: { name: 'MangaUpdates', mount: (host) => mountCatalogBrowse(host, 'mangaupdates', { title: 'Manga' }) },
+    comikey: { name: 'Comikey', mount: (host) => mountCatalogBrowse(host, 'comikey', { title: 'Manga' }) },
+    webtoon: { name: 'WEBTOON', mount: (host) => mountCatalogBrowse(host, 'webtoon', { title: 'Manga' }) },
+    torbox: { name: 'TorBox', mount: (host) => mountTorboxBrowse(host, 'manga') },
     local: { name: 'Your manga', mount: renderLocalManga },
   }, 'mangadex', 'mangaCatalog');
 }

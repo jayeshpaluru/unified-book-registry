@@ -22,6 +22,7 @@ export function createTorboxClient(token, { fetchImpl = fetch } = {}) {
   }
   return {
     account: () => request('user/me'),
+    cached: (hash) => request('torrents/checkcached', { hash, format: 'object', list_files: true }),
     async list(kind = 'torrents') {
       if (!KINDS.has(kind)) throw new Error('Invalid TorBox collection.');
       const items = [];

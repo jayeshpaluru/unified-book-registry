@@ -24,7 +24,7 @@ const mangaId = '0a580438-bc72-4503-940b-12a5da881b56';
 const chapterId = '93ea0d72-169d-4418-b48d-95091972a871';
 
 test('Anna import supports compressed, split UTF-8 JSONL and filters comics from books', async (t) => {
-  for (const [filename, compress] of [['metadata.jsonl', (b) => b], ['metadata.jsonl.gz', gzipSync], ['metadata.jsonl.zst', zstdCompressSync]]) {
+  for (const [filename, compress] of [['metadata.jsonl', (b) => b], ['metadata.jsonl.gz', gzipSync], ['metadata.jsonl.zst', zstdCompressSync], ['aarecords__0.json.gz', gzipSync]]) {
     const store = openAnnaStore();
     t.after(() => store.close());
     const bytes = compress(Buffer.from([JSON.stringify(first), '', JSON.stringify(second),

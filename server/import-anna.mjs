@@ -49,7 +49,7 @@ export async function importAnna(stream, store, { filename = 'metadata.jsonl', b
     }
   };
   try {
-    if (/\.json$/i.test(name)) {
+    if (/\.json$/i.test(name) && !/(?:^|[/\\])aarecords(?:__\d+)?\.json$/i.test(name)) {
       const decoder = new StringDecoder('utf8');
       let raw = '', bytes = 0;
       for await (const chunk of input) {

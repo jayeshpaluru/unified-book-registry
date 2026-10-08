@@ -36,7 +36,7 @@ export const pseItem = (entry, sourceId) => remote({
 });
 
 export const catalogItem = (entry) => remote({
-  id: `catalog:${entry.source}:${entry.id}`, type: entry.source === 'anna' ? entry.type || 'book' : 'manga',
+  id: `catalog:${entry.source}:${entry.id}`, type: entry.source === 'anna' ? entry.type || 'book' : entry.type === 'comic' || entry.type === 'book' ? entry.type : 'manga',
   format: 'catalog', title: entry.title, coverUrl: entry.cover, sourceName: entry.sourceName,
   catalogEntry: entry,
 });

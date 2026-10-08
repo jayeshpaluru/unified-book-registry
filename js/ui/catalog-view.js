@@ -6,6 +6,9 @@ import * as db from '../db.js';
 import * as anna from '../sources/anna.js';
 import * as mangadex from '../sources/mangadex.js';
 import * as mangaupdates from '../sources/mangaupdates.js';
+import * as publishers from '../sources/publishers.js';
+import { catalogMode, catalogRequest } from '../sources/catalog-api.js';
+import { hasGithubSession } from '../sources/github-jobs.js';
 
 export function sourceLink(label, href, className = 'btn') {
   try {
@@ -155,19 +158,50 @@ export const openCatalogEntry = (entry) => sheet(entry.title, catalogBody(entry)
 
 export function mountCatalogBrowse(view, provider, { title, type } = {}) {
   const sources = { anna, mangadex, mangaupdates };
-  const names = { anna: 'Anna’s Archive', mangadex: 'MangaDex', mangaupdates: 'MangaUpdates' };
+  const names = { anna: 'Anna’s Archive', mangadex: 'MangaDex', mangaupdates: 'MangaUpdates', comikey: 'Comikey', webtoon: 'WEBTOON' };
   const intro = {
-    anna: 'Search your imported Anna’s Archive metadata by title, author or ISBN. Import a metadata export in Settings to populate this catalog.',
+    anna: 'Search imported shadow-library metadata by title, author or ISBN. This is a metadata catalog; book files are not bundled. Import combined aarecord data in Settings.',
     mangadex: 'Browse MangaDex manga and scanlations. Open a series to choose a chapter and translation language.',
     mangaupdates: 'Find manga, manhwa and manhua with scanlation releases, credited groups and release dates from MangaUpdates.',
+    comikey: 'Browse the official Comikey manga, manhwa and webcomic directory. Free previews and paid chapter unlocks vary by title.',
+    webtoon: 'Browse English WEBTOON Originals and open their official episode readers. Some episodes require coins.',
   };
   const cleanup = mountBrowse(view, {
     title: title || names[provider], intro: intro[provider], placeholder: provider === 'anna' ? 'Title, author or ISBN' : 'Search series titles',
-    fetchPage: (text, cursor) => provider === 'anna' ? anna.search(text, cursor, type) : sources[provider].search(text, cursor),
+    fetchPage: (text, cursor) => provider === 'anna' ? anna.search(text, cursor, type) : sources[provider]
+      ? sources[provider].search(text, cursor) : publishers.search(provider, text, cursor),
     renderCard: (entry) => card({ title: entry.title, sub: entry.author || entry.year || entry.sourceName,
       src: entry.cover, onOpen: () => openCatalogEntry(entry) }),
   });
-  view.append(h('p', { class: 'muted' }, 'Catalog connection and metadata imports: ', h('a', { href: '#/settings' }, 'Settings')));
+  const note = h('p', { class: 'muted' });
+  view.append(note);
+  catalogMode().then(async (mode) => {
+    if (mode !== 'static') { note.append('Catalog connection and metadata imports: ', h('a', { href: '#/settings' }, 'Settings')); return; }
+    try {
+      const health = await anna.status();
+      const source = health.providers[provider];
+      note.append(`Static catalog: ${(source?.records || 0).toLocaleString()} entries. ${source?.coverage || ''} `,
+        h('a', { href: '#/settings' }, 'Catalog status / connection'));
+      if (provider === 'anna' && !health.annaRecords) note.append(' Anna’s metadata has not been imported yet; this is not the complete shadow-library index.');
+    } catch { note.append('Static catalog not yet built. ', h('a', { href: '#/settings' }, 'Settings')); }
+  });
+  if (['mangadex', 'mangaupdates'].includes(provider)) {
+    const status = h('p', { class: 'muted', role: 'status' });
+    const live = h('button', { class: 'btn', onClick: async () => {
+      if (!hasGithubSession()) { toast('Connect your GitHub Actions session in Settings for live search.'); return; }
+      live.disabled = true; status.textContent = 'Searching the full provider catalog via GitHub Actions…';
+      try {
+        const text = view.querySelector('input[type="search"]')?.value || '';
+        const raw = await catalogRequest(`${provider}/search`, { q: text, ...(provider === 'mangadex' ? { offset: 0 } : { page: 1 }) }, { live: true });
+        const result = sources[provider].mapSearch(raw);
+        const grid = h('div', { class: 'grid' }, result.items.map((entry) => card({ title: entry.title, sub: entry.author || entry.sourceName,
+          src: entry.cover, onOpen: () => openCatalogEntry(entry) })));
+        status.replaceChildren(h('p', {}, `${result.total.toLocaleString()} matches · showing the first ${result.items.length}.`), grid);
+      } catch (error) { status.textContent = error.message; }
+      finally { live.disabled = false; }
+    } }, 'Search full provider live');
+    catalogMode().then((mode) => { if (mode === 'static') view.append(live, status); });
+  }
   return cleanup;
 }
 

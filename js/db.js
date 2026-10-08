@@ -1,17 +1,17 @@
 // The single persistence layer: items, file blobs, settings, OPDS sources.
 const NAME = 'ubr';
-const STORES = { items: 'id', sources: 'id', blobs: null, settings: null };
+const STORES = { items: 'id', sources: 'id', blobs: null, settings: null, annaRecords: 'id' };
 
 let opening;
 function open() {
   opening ||= new Promise((resolve, reject) => {
-    const req = indexedDB.open(NAME, 1);
+    const req = indexedDB.open(NAME, 2);
     req.onupgradeneeded = () => {
       for (const [store, keyPath] of Object.entries(STORES)) {
-        req.result.createObjectStore(store, keyPath ? { keyPath } : undefined);
+        if (!req.result.objectStoreNames.contains(store)) req.result.createObjectStore(store, keyPath ? { keyPath } : undefined);
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => { req.result.onversionchange = () => { req.result.close(); opening = null; }; resolve(req.result); };
     req.onerror = () => reject(req.error);
   });
   return opening;
@@ -31,6 +31,15 @@ export const get = (store, key) => run(store, 'readonly', (s) => s.get(key));
 export const all = (store) => run(store, 'readonly', (s) => s.getAll());
 export const put = (store, value, key) => run(store, 'readwrite', (s) => s.put(value, key));
 export const remove = (store, key) => run(store, 'readwrite', (s) => s.delete(key));
+export async function putMany(store, values) {
+  const database = await open();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(store, 'readwrite');
+    for (const value of values) tx.objectStore(store).put(value);
+    tx.oncomplete = resolve; tx.onerror = tx.onabort = () => reject(tx.error);
+  });
+}
+export const isCredentialSetting = (key) => /(?:token|password|secret|api.?key)/i.test(String(key));
 
 export async function getSetting(key, fallback) {
   const v = await get('settings', key);
@@ -78,7 +87,7 @@ export async function exportMetadata() {
     const store = tx.objectStore('settings');
     const keys = store.getAllKeys();
     const values = store.getAll();
-    tx.oncomplete = () => resolve(Object.fromEntries(keys.result.map((k, i) => [k, values.result[i]])));
+    tx.oncomplete = () => resolve(Object.fromEntries(keys.result.flatMap((k, i) => isCredentialSetting(k) ? [] : [[k, values.result[i]]])));
     tx.onerror = () => reject(tx.error);
   });
   return { version: 1, exportedAt: Date.now(), items, sources, settings };
@@ -106,6 +115,6 @@ export async function importMetadata(data) {
     const existing = await get('sources', s.id);
     await put('sources', { ...s, pass: existing?.pass || '' });
   }
-  for (const [k, v] of Object.entries(data.settings || {})) await setSetting(k, v);
+  for (const [k, v] of Object.entries(data.settings || {})) if (!isCredentialSetting(k)) await setSetting(k, v);
   return { restored, skipped };
 }

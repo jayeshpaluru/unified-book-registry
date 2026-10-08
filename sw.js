@@ -1,8 +1,9 @@
 // Cache-first app shell + vendor files; stale-while-revalidate covers (capped).
 // Archive downloads and page images are never intercepted, so they are never cached here.
-const VERSION = 'v2';
-const SHELL = `ubr-shell-${VERSION}`;
-const COVERS = `ubr-covers-${VERSION}`;
+const VERSION = 'v3';
+const PREFIX = `ubr-${new URL(self.registration.scope).pathname.replace(/[^a-zA-Z0-9]/g, '-')}`;
+const SHELL = `${PREFIX}-shell-${VERSION}`;
+const COVERS = `${PREFIX}-covers-${VERSION}`;
 const MAX_COVERS = 300;
 
 const SHELL_FILES = [
@@ -10,10 +11,12 @@ const SHELL_FILES = [
   'js/app.js', 'js/db.js', 'js/util.js', 'js/pages.js', 'js/zip.js', 'js/spread.js', 'js/lib.js', 'js/items.js', 'js/importers.js',
   'js/sources/archive.js', 'js/sources/gutendex.js', 'js/sources/opds.js',
   'js/sources/catalog-api.js', 'js/sources/anna.js', 'js/sources/mangadex.js', 'js/sources/mangaupdates.js',
+  'js/sources/static-catalog.js', 'js/sources/catalog-search.js', 'js/sources/browser-metadata.js', 'js/sources/github-jobs.js', 'js/sources/publishers.js',
   'js/reader/image-reader.js', 'js/reader/book-reader.js', 'js/reader/page-source.js',
   'js/ui/dom.js', 'js/ui/grid.js', 'js/ui/item-menu.js', 'js/ui/browse.js', 'js/ui/library.js', 'js/ui/tabs.js',
   'js/ui/settings.js', 'js/ui/opds-view.js', 'js/ui/reader-view.js',
   'js/ui/catalog-view.js', 'js/ui/catalog-settings.js',
+  'js/ui/torbox-view.js',
   'vendor/fflate.js', 'vendor/jszip.min.js', 'vendor/epub.min.js', 'vendor/pdf.min.js', 'vendor/pdf.worker.min.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
@@ -29,7 +32,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => ![SHELL, COVERS].includes(k)).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith(PREFIX) && ![SHELL, COVERS].includes(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -59,10 +62,18 @@ async function staleWhileRevalidate(request) {
 self.addEventListener('fetch', (e) => {
   const { request } = e;
   if (request.method !== 'GET') return;
+  if (request.headers.has('Authorization')) return;
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/catalog/')) return;
   if (url.origin === location.origin) {
-    e.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request)));
+    if (url.pathname.includes('/catalog/')) {
+      e.respondWith(fetch(request).then(async (response) => {
+        if (response.ok) { const cache = await caches.open(SHELL); await cache.put(request, response.clone()); }
+        return response;
+      }).catch(async () => (await (await caches.open(SHELL)).match(request)) || Response.error()));
+      return;
+    }
+    e.respondWith(caches.open(SHELL).then((cache) => cache.match(request, { ignoreSearch: true })).then((hit) => hit || fetch(request)));
   } else if (isCover(url)) {
     e.respondWith(staleWhileRevalidate(request));
   }

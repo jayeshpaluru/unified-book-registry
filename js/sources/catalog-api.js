@@ -1,5 +1,10 @@
 import { getSetting } from '../db.js';
 export const DEFAULT_CATALOG_URL = 'http://127.0.0.1:8787';
+export async function catalogMode() {
+  const mode = await getSetting('catalogMode', 'auto');
+  if (mode !== 'auto') return mode;
+  return typeof location === 'undefined' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? 'companion' : 'static';
+}
 export function validateCatalogUrl(value) {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
@@ -8,6 +13,10 @@ export function validateCatalogUrl(value) {
   return url.href.replace(/\/$/, '');
 }
 export async function catalogRequest(path, params = {}, init = {}) {
+  if (await catalogMode() === 'static') {
+    const { staticRequest } = await import('./static-catalog.js');
+    return staticRequest(path, params, init);
+  }
   const base = validateCatalogUrl(await getSetting('catalogUrl', DEFAULT_CATALOG_URL));
   const url = new URL(`${base}/api/catalog/${path}`);
   for (const [key, value] of Object.entries(params)) {
