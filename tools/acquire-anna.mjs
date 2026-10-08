@@ -18,6 +18,7 @@ const statusFile = resolve(directory, 'status.json');
 const lockFile = resolve(directory, 'acquisition.lock');
 const dbPath = resolve(root, 'data/anna.sqlite');
 const RESERVE = 100n * 1024n ** 3n;
+const IMPORT_BATCH_SIZE = 10000;
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 function alive(pid) {
   if (!Number.isSafeInteger(pid) || pid < 1) return false;
@@ -108,8 +109,11 @@ async function run() {
     await lock.truncate(0);
     await lock.write(JSON.stringify({ pid: process.pid, aria2Pid: child.pid, snapshot: plan.snapshot, hash: plan.hash }), 0, 'utf8');
     store = openAnnaStore(dbPath);
+    const storeConfiguration = store.configuration();
+    console.log(`Local SQLite: ${(storeConfiguration.cacheKiB / 1024).toFixed(0)} MiB page-cache target; ${IMPORT_BATCH_SIZE.toLocaleString()} records per atomic batch; journal ${storeConfiguration.journalMode}; synchronous ${storeConfiguration.synchronous}.`);
     state = { snapshot: plan.snapshot, infoHash: plan.hash, pid: process.pid, aria2Pid: child.pid,
-      selectedBytes: plan.bytes, completedBytes: 0, records: store.total(), importedShards: [], status: 'starting' };
+      selectedBytes: plan.bytes, completedBytes: 0, records: store.total(), importedShards: [], status: 'starting',
+      storeConfiguration, importBatchSize: IMPORT_BATCH_SIZE };
     const save = async () => { state.updatedAt = new Date().toISOString(); await writeFile(statusFile, JSON.stringify(state, null, 2)); };
     async function rpc(method, params = []) {
       const r = await fetch(`http://127.0.0.1:${port}/jsonrpc`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -136,7 +140,7 @@ async function run() {
         ensureDisk(); state.status = 'importing'; state.currentShard = file.shard; await save();
         console.log(`Importing completed metadata shard ${file.shard + 1}/${plan.files.length} into local SQLite…`);
         let lastProgress = 0;
-        const result = await importAnna(createReadStream(path), store, { filename: file.name, batchSize: 2000,
+        const result = await importAnna(createReadStream(path), store, { filename: file.name, batchSize: IMPORT_BATCH_SIZE,
           signal: controller.signal, idleTimeoutMs: 300000, onProgress: (progress) => {
           if (stopped) throw new Error('Acquisition stopped; committed metadata batches are preserved.');
           if (Date.now() - lastProgress > 15000) {

@@ -102,6 +102,8 @@ Downloads and local progress live under `data/anna-metadata/20260208/`; complete
 
 Imports use a cancellable byte-stream pipeline. Ctrl-C interrupts a waiting read as well as an active batch, rolls back only its unfinished batch and records an intentional pause. Five minutes without another decompressed chunk fails the acquisition rather than leaving it indefinitely marked as importing; this is an error, not a successful shard checkpoint or a graceful pause. A crash or an idle failure requires the default integrity-checking resume.
 
+The local store targets a 64 MiB SQLite page cache and acquisition commits batches of 10,000 records. WAL and FULL synchronous durability remain enabled. Identical records are no-ops on retry, while changed metadata still updates both the record and its search index. The cache target is connection-local, not a browser setting or a cap on the entire Node process. These settings do not take effect in an already-running importer.
+
 After a graceful stop, with unchanged data files and the original `.aria2` control file, `npm run acquire:anna -- --resume-verified-pieces` skips another full startup integrity scan and resumes aria2's saved verified-piece ledger. It requires the matching paused snapshot and refuses live/duplicate processes or missing control files. Incoming torrent pieces are still hash-checked. Use the default command after a crash, external file changes or any integrity doubt.
 
 ### Import an existing dump

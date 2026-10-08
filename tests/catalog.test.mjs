@@ -70,6 +70,41 @@ test('Anna imports update records and the search index without resetting IDs or 
   assert.equal(store.search('replacement', { type: 'comic' }).total, 1);
 });
 
+test('Identical metadata retries are no-ops while every changed field still updates its record and search index', (t) => {
+  const store = openAnnaStore(); t.after(() => store.close());
+  let mapped = mapRecord(first);
+  assert.equal(store.put(mapped).changes, 1);
+  assert.equal(store.put(structuredClone(mapped)).changes, 0);
+  for (const change of [{ title: 'Updated title' }, { author: 'Updated author' }, { isbn: ['9781234567890'] },
+    { summary: 'Changed description without changed search fields' }, { type: 'comic' }]) {
+    mapped = { ...mapped, ...change };
+    assert.equal(store.put(mapped).changes, 1);
+    assert.equal(store.put(structuredClone(mapped)).changes, 0);
+    assert.equal(store.total(), 1);
+  }
+  const result = store.search('Updated title author 9781234567890', { type: 'comic' });
+  assert.equal(result.total, 1); assert.deepEqual(result.items[0], mapped);
+  assert.equal(store.search('monopoly').total, 0);
+  assert.equal(store.search('', { type: 'book' }).total, 0);
+});
+
+test('The local store cache target is validated before opening a database and does not change durability', (t) => {
+  for (const cacheKiB of [0, -1, 1023, 262145, 2 ** 53, '65536']) {
+    assert.throws(() => openAnnaStore(':memory:', { cacheKiB }), /between 1 and 256 MiB/);
+  }
+  for (const cacheKiB of [1024, 2000, 65536, 262144]) {
+    const store = openAnnaStore(':memory:', { cacheKiB });
+    try { assert.deepEqual(store.configuration(), { cacheKiB, journalMode: 'memory', synchronous: 2 });
+      store.put(mapRecord(first)); assert.equal(store.search('monopoly').total, 1); }
+    finally { store.close(); }
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'ubr-store-cache-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const store = openAnnaStore(join(dir, 'fixture.sqlite'));
+  try { assert.deepEqual(store.configuration(), { cacheKiB: 65536, journalMode: 'wal', synchronous: 2 }); }
+  finally { store.close(); }
+});
+
 test('Anna JSON arrays and Elasticsearch hits preserve multibyte characters across input chunks', async (t) => {
   const store = openAnnaStore(); t.after(() => store.close());
   const json = Buffer.from(JSON.stringify({ hits: { hits: [{ _id: first.id,
