@@ -58,3 +58,12 @@ export function verifiedShardRecords(result) {
   }
   return result.imported;
 }
+
+export function acquisitionFailureStatus(error, stopRequested = false) {
+  const seen = new Set();
+  for (let cause = error; cause && !seen.has(cause); cause = cause.cause) {
+    seen.add(cause);
+    if (stopRequested && (cause.name === 'AbortError' || cause.code === 'ABORT_ERR')) return 'paused';
+  }
+  return 'error';
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords } from '../server/anna-acquisition.mjs';
+import { metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords, acquisitionFailureStatus } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 
 const info = () => ({ name: 'public-metadata', hash: 'a'.repeat(40), files: [
@@ -69,4 +69,14 @@ test('Selected snapshot shards cannot receive completion checkpoints when record
     store.finishImport('complete', verifiedShardRecords({ imported: 42, skipped: 0 }));
     assert.equal(store.completedImport('complete'), true);
   } finally { store.close(); }
+});
+
+test('Only intentional aborts become resumable pauses, not corruption or idle failures', () => {
+  const aborted = new Error('Import failed', { cause: Object.assign(new Error('Aborted'), { code: 'ABORT_ERR' }) });
+  assert.equal(acquisitionFailureStatus(aborted, true), 'paused');
+  assert.equal(acquisitionFailureStatus(aborted, false), 'error');
+  assert.equal(acquisitionFailureStatus(new Error('Bad gzip checksum'), true), 'error');
+  assert.equal(acquisitionFailureStatus(new DOMException('Stopped', 'AbortError'), true), 'paused');
+  const cycle = new Error('Cycle'); cycle.cause = cycle;
+  assert.equal(acquisitionFailureStatus(cycle, true), 'error');
 });

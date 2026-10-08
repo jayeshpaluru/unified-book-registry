@@ -100,6 +100,8 @@ This selects only the 12 `aarecords__N.json.gz` shards from the official **20260
 
 Downloads and local progress live under `data/anna-metadata/20260208/`; completed shards stream directly into `data/anna.sqlite` without writing decompressed copies. The downloader uses a loopback-only RPC endpoint with an ephemeral credential. A process-checked lock prevents duplicate acquisition. Stop with Ctrl-C and rerun the same command to resume existing pieces and completed-shard checkpoints. Committed import batches survive interruption; an unfinished shard can be reimported safely. A safety stop occurs before consuming the last 100 GiB of disk. Keep the source files and SQLite database out of Git and retain independent backups.
 
+Imports use a cancellable byte-stream pipeline. Ctrl-C interrupts a waiting read as well as an active batch, rolls back only its unfinished batch and records an intentional pause. Five minutes without another decompressed chunk fails the acquisition rather than leaving it indefinitely marked as importing; this is an error, not a successful shard checkpoint or a graceful pause. A crash or an idle failure requires the default integrity-checking resume.
+
 After a graceful stop, with unchanged data files and the original `.aria2` control file, `npm run acquire:anna -- --resume-verified-pieces` skips another full startup integrity scan and resumes aria2's saved verified-piece ledger. It requires the matching paused snapshot and refuses live/duplicate processes or missing control files. Incoming torrent pieces are still hash-checked. Use the default command after a crash, external file changes or any integrity doubt.
 
 ### Import an existing dump

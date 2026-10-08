@@ -113,6 +113,49 @@ test('Import progress safety stops preserve committed batches and the original e
   assert.equal(store.total(), 2);
 });
 
+test('Cancellation interrupts a waiting metadata stream and rolls back only its unfinished batch', async (t) => {
+  for (const compressed of [false, true]) {
+    const store = openAnnaStore(); t.after(() => store.close());
+    const third = record('md5:00000000000000000000000000000003', 'Pending third record');
+    const raw = Buffer.from([first, second, third].map(value => JSON.stringify(value)).join('\n') + '\n');
+    let sent = false;
+    const source = new Readable({ read() { if (!sent) { sent = true; this.push(compressed ? gzipSync(raw) : raw); } } });
+    const controller = new AbortController();
+    let timer;
+    t.after(() => clearTimeout(timer));
+    await assert.rejects(importAnna(source, store, {
+      filename: compressed ? 'waiting.jsonl.gz' : 'waiting.jsonl', batchSize: 2, signal: controller.signal,
+      onProgress() { timer = setTimeout(() => controller.abort(new DOMException('Fixture stop', 'AbortError')), 20); },
+    }), /2 records committed/);
+    assert.equal(source.destroyed, true);
+    assert.equal(store.total(), 2);
+    assert.equal(store.search('Pending third').total, 0);
+    assert.equal(store.completedImport('waiting'), false);
+  }
+});
+
+test('An idle metadata stream fails closed with its source released and committed batches preserved', async (t) => {
+  const store = openAnnaStore(); t.after(() => store.close());
+  let sent = false;
+  const source = new Readable({ read() { if (!sent) { sent = true; this.push(gzipSync(Buffer.from(JSON.stringify(first) + '\n'))); } } });
+  await assert.rejects(importAnna(source, store, { filename: 'idle.jsonl.gz', batchSize: 1, idleTimeoutMs: 50 }), /made no progress.*1 records committed/);
+  assert.equal(source.destroyed, true); assert.equal(store.total(), 1);
+  assert.equal(store.completedImport('idle'), false);
+  assert.throws(() => store.rollback(), /no transaction/i);
+});
+
+test('Compressed source errors and multi-member gzip checksums are not accepted as successful imports', async (t) => {
+  const store = openAnnaStore(); t.after(() => store.close());
+  async function* failedSource() { yield gzipSync(Buffer.from(JSON.stringify(first) + '\n')); throw new Error('Fixture read failure'); }
+  await assert.rejects(importAnna(failedSource(), store, { filename: 'failed.jsonl.gz' }), /Fixture read failure/);
+  assert.equal(store.total(), 0);
+  const members = [first, second].map(value => gzipSync(Buffer.from(JSON.stringify(value) + '\n')));
+  assert.equal((await importAnna(members, store, { filename: 'members.jsonl.gz' })).imported, 2);
+  const corrupt = Buffer.from(members[1]); corrupt[corrupt.length - 1] ^= 1;
+  await assert.rejects(importAnna([members[0], corrupt], store, { filename: 'bad-members.jsonl.gz' }), /Import failed/);
+  assert.equal(store.total(), 2);
+});
+
 test('MangaDex maps localized series, credited chapters and image pages', () => {
   const manga = mangadex.mapManga({ id: mangaId, attributes: { title: { ja: '日本語' }, originalLanguage: 'ja',
     availableTranslatedLanguages: ['en', 'fr'] }, relationships: [

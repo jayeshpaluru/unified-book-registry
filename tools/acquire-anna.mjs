@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { torrentInfo } from '../server/torrent-metadata.mjs';
-import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords } from '../server/anna-acquisition.mjs';
+import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords, acquisitionFailureStatus } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 import { importAnna } from '../server/import-anna.mjs';
 
@@ -73,7 +73,12 @@ async function run() {
   }
   const lock = await open(lockFile, 'wx', 0o600);
   let child, exitStatus, store, stopped = false, state;
-  const stop = () => { stopped = true; child?.kill('SIGTERM'); };
+  const controller = new AbortController();
+  const stop = () => {
+    stopped = true;
+    controller.abort(new DOMException('Acquisition stopped; committed metadata batches are preserved.', 'AbortError'));
+    child?.kill('SIGTERM');
+  };
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
   try {
     await lock.writeFile(JSON.stringify({ pid: process.pid, snapshot: plan.snapshot, hash: plan.hash }));
@@ -131,7 +136,8 @@ async function run() {
         ensureDisk(); state.status = 'importing'; state.currentShard = file.shard; await save();
         console.log(`Importing completed metadata shard ${file.shard + 1}/${plan.files.length} into local SQLite…`);
         let lastProgress = 0;
-        const result = await importAnna(createReadStream(path), store, { filename: file.name, batchSize: 2000, onProgress: (progress) => {
+        const result = await importAnna(createReadStream(path), store, { filename: file.name, batchSize: 2000,
+          signal: controller.signal, idleTimeoutMs: 300000, onProgress: (progress) => {
           if (stopped) throw new Error('Acquisition stopped; committed metadata batches are preserved.');
           if (Date.now() - lastProgress > 15000) {
             ensureDisk(); lastProgress = Date.now();
@@ -172,7 +178,15 @@ async function run() {
     }
     if (stopped && state.status !== 'complete') { state.status = 'paused'; await save(); }
   } catch (error) {
-    if (state) { state.status = 'error'; state.error = error.message; await writeFile(statusFile, JSON.stringify(state, null, 2)); }
+    const status = acquisitionFailureStatus(error, stopped);
+    if (state) {
+      state.status = status; state.records = store?.total() ?? state.records;
+      state.updatedAt = new Date().toISOString();
+      if (status === 'paused') delete state.error;
+      else state.error = error.message;
+      await writeFile(statusFile, JSON.stringify(state, null, 2));
+    }
+    if (status === 'paused') { console.log('Acquisition paused; committed metadata batches and downloaded pieces are preserved.'); return; }
     throw error;
   } finally {
     child?.kill('SIGTERM');
