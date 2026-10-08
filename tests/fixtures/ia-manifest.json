@@ -1,0 +1,378 @@
+{
+ "@context": "http://iiif.io/api/presentation/3/context.json",
+ "behavior": [
+  "paged"
+ ],
+ "homepage": [
+  {
+   "format": "text/html",
+   "id": "https://archive.org/details/Captain_Marvel_Adventures_059",
+   "label": {
+    "en": [
+     "Item Page on Internet Archive"
+    ]
+   },
+   "type": "Text"
+  }
+ ],
+ "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/manifest.json",
+ "items": [
+  {
+   "height": 1536,
+   "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059$0/canvas",
+   "items": [
+    {
+     "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/annotationPage/0",
+     "items": [
+      {
+       "body": {
+        "format": "image/jpeg",
+        "id": "https://iiif.archive.org/image/iiif/3/Captain_Marvel_Adventures_059%2FCaptain_Marvel_Adventures_059_jp2.zip%2FCaptain_Marvel_Adventures_059_jp2%2FCaptain_Marvel_Adventures_059_0000.jp2/full/max/0/default.jpg",
+        "service": [
+         {
+          "id": "https://iiif.archive.org/image/iiif/3/Captain_Marvel_Adventures_059%2FCaptain_Marvel_Adventures_059_jp2.zip%2FCaptain_Marvel_Adventures_059_jp2%2FCaptain_Marvel_Adventures_059_0000.jp2",
+          "profile": "level2",
+          "type": "ImageService3"
+         }
+        ],
+        "type": "Image"
+       },
+       "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/annotation/0",
+       "motivation": "painting",
+       "target": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059$0/canvas",
+       "type": "Annotation"
+      }
+     ],
+     "type": "AnnotationPage"
+    }
+   ],
+   "label": {
+    "none": [
+     "0"
+    ]
+   },
+   "type": "Canvas",
+   "width": 1088
+  },
+  {
+   "height": 1392,
+   "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059$1/canvas",
+   "items": [
+    {
+     "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/annotationPage/1",
+     "items": [
+      {
+       "body": {
+        "format": "image/jpeg",
+        "id": "https://iiif.archive.org/image/iiif/3/Captain_Marvel_Adventures_059%2FCaptain_Marvel_Adventures_059_jp2.zip%2FCaptain_Marvel_Adventures_059_jp2%2FCaptain_Marvel_Adventures_059_0001.jp2/full/max/0/default.jpg",
+        "service": [
+         {
+          "id": "https://iiif.archive.org/image/iiif/3/Captain_Marvel_Adventures_059%2FCaptain_Marvel_Adventures_059_jp2.zip%2FCaptain_Marvel_Adventures_059_jp2%2FCaptain_Marvel_Adventures_059_0001.jp2",
+          "profile": "level2",
+          "type": "ImageService3"
+         }
+        ],
+        "type": "Image"
+       },
+       "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/annotation/1",
+       "motivation": "painting",
+       "target": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059$1/canvas",
+       "type": "Annotation"
+      }
+     ],
+     "type": "AnnotationPage"
+    }
+   ],
+   "label": {
+    "none": [
+     "1"
+    ]
+   },
+   "type": "Canvas",
+   "width": 976
+  },
+  {
+   "height": 1472,
+   "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059$2/canvas",
+   "items": [
+    {
+     "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/annotationPage/2",
+     "items": [
+      {
+       "body": {
+        "format": "image/jpeg",
+        "id": "https://iiif.archive.org/image/iiif/3/Captain_Marvel_Adventures_059%2FCaptain_Marvel_Adventures_059_jp2.zip%2FCaptain_Marvel_Adventures_059_jp2%2FCaptain_Marvel_Adventures_059_0002.jp2/full/max/0/default.jpg",
+        "service": [
+         {
+          "id": "https://iiif.archive.org/image/iiif/3/Captain_Marvel_Adventures_059%2FCaptain_Marvel_Adventures_059_jp2.zip%2FCaptain_Marvel_Adventures_059_jp2%2FCaptain_Marvel_Adventures_059_0002.jp2",
+          "profile": "level2",
+          "type": "ImageService3"
+         }
+        ],
+        "type": "Image"
+       },
+       "id": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059/annotation/2",
+       "motivation": "painting",
+       "target": "https://iiif.archive.org/iiif/Captain_Marvel_Adventures_059$2/canvas",
+       "type": "Annotation"
+      }
+     ],
+     "type": "AnnotationPage"
+    }
+   ],
+   "label": {
+    "none": [
+     "2"
+    ]
+   },
+   "type": "Canvas",
+   "width": 1024
+  }
+ ],
+ "label": {
+  "none": [
+   "Captain Marvel Adventures 059"
+  ]
+ },
+ "metadata": [
+  {
+   "label": {
+    "none": [
+     "identifier"
+    ]
+   },
+   "value": {
+    "none": [
+     "Captain_Marvel_Adventures_059"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "language"
+    ]
+   },
+   "value": {
+    "none": [
+     "eng"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "mediatype"
+    ]
+   },
+   "value": {
+    "none": [
+     "texts"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "title"
+    ]
+   },
+   "value": {
+    "none": [
+     "Captain Marvel Adventures 059"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "collection"
+    ]
+   },
+   "value": {
+    "none": [
+     "captainmarveladventures",
+     "comics",
+     "folkscanomy"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "addeddate"
+    ]
+   },
+   "value": {
+    "none": [
+     "2014-01-12 04:35:49"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "identifier-access"
+    ]
+   },
+   "value": {
+    "none": [
+     "http://archive.org/details/Captain_Marvel_Adventures_059"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "identifier-ark"
+    ]
+   },
+   "value": {
+    "none": [
+     "ark:/13960/t5s77ts32"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "ocr"
+    ]
+   },
+   "value": {
+    "none": [
+     "ABBYY FineReader 9.0"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "repub_state"
+    ]
+   },
+   "value": {
+    "none": [
+     "4"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "subject"
+    ]
+   },
+   "value": {
+    "none": [
+     "marvel",
+     "johnny",
+     "captain",
+     "jetsins",
+     "vacutex",
+     "waa",
+     "crasy",
+     "dime",
+     "boys",
+     "farm",
+     "captain marvel",
+     "marvel captain"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "foldoutcount"
+    ]
+   },
+   "value": {
+    "none": [
+     "0"
+    ]
+   }
+  },
+  {
+   "label": {
+    "none": [
+     "coverleaf"
+    ]
+   },
+   "value": {
+    "none": [
+     "0"
+    ]
+   }
+  }
+ ],
+ "partOf": [
+  {
+   "id": "https://iiif.archive.org/iiif/captainmarveladventures/collection.json",
+   "type": "Collection"
+  },
+  {
+   "id": "https://iiif.archive.org/iiif/comics/collection.json",
+   "type": "Collection"
+  },
+  {
+   "id": "https://iiif.archive.org/iiif/folkscanomy/collection.json",
+   "type": "Collection"
+  }
+ ],
+ "provider": [
+  {
+   "homepage": [
+    {
+     "format": "text/html",
+     "id": "https://archive.org",
+     "label": {
+      "en": [
+       "Internet Archive Homepage"
+      ]
+     },
+     "type": "Text"
+    }
+   ],
+   "id": "https://archive.org",
+   "label": {
+    "en": [
+     "The Internet Archive"
+    ]
+   },
+   "logo": [
+    {
+     "format": "image/png",
+     "height": 79,
+     "id": "https://archive.org/images/glogo.png",
+     "type": "Image",
+     "width": 79
+    }
+   ],
+   "type": "Agent"
+  }
+ ],
+ "summary": {
+  "none": [
+   "Captain Marvel Adventures 059"
+  ]
+ },
+ "thumbnail": [
+  {
+   "format": "image/jpeg",
+   "height": 254,
+   "id": "https://iiif.archive.org/image/iiif/2/Captain_Marvel_Adventures_059%2f__ia_thumb.jpg/full/180,/0/default.jpg",
+   "service": [
+    {
+     "@id": "https://iiif.archive.org/image/iiif/2/Captain_Marvel_Adventures_059%2F__ia_thumb.jpg",
+     "@type": "ImageService2",
+     "format": "image/jpeg",
+     "profile": "http://iiif.io/api/image/2/level2.json"
+    }
+   ],
+   "type": "Image",
+   "width": 180
+  }
+ ],
+ "type": "Manifest",
+ "viewingDirection": "left-to-right"
+}

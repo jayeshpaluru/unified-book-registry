@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Unified Book Registry</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Registry">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <main id="view" aria-live="polite"></main>
+  <div id="reader" hidden></div>
+  <nav id="tabbar" aria-label="Sections">
+    <a href="#/library" data-tab="library">Library</a>
+    <a href="#/comics" data-tab="comics">Comics</a>
+    <a href="#/books" data-tab="books">Books</a>
+    <a href="#/manga" data-tab="manga">Manga</a>
+    <a href="#/settings" data-tab="settings">Settings</a>
+  </nav>
+  <div id="toasts"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

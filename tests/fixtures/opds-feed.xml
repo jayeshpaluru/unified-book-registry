@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:pse="http://vaemendis.net/opds-pse/1.0">
+  <id>root</id>
+  <title>Komga &amp; Friends</title>
+  <link rel="self" href="/opds/v1.2/catalog" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="next" href="/opds/v1.2/series?page=1" type="application/atom+xml;profile=opds-catalog"/>
+  <entry>
+    <id>series-all</id>
+    <title>All series</title>
+    <link rel="subsection" href="/opds/v1.2/series" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+  <entry>
+    <id>book-1</id>
+    <title>Issue #1</title>
+    <author><name>Jane Artist</name></author>
+    <summary>First issue.</summary>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/api/v1/books/1/thumbnail" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="/api/v1/books/1/file/issue1.cbz" type="application/zip"/>
+    <link rel="http://vaemendis.net/opds-pse/stream" pse:count="24" href="/api/v1/books/1/pages/{pageNumber}?zero_based=true" type="image/jpeg"/>
+  </entry>
+  <entry>
+    <id>book-2</id>
+    <title>A Novel</title>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="https://example.com/novel.epub" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition" href="/novel.cbr" type="application/x-cbr"/>
+  </entry>
+</feed>

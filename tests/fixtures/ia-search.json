@@ -1,0 +1,38 @@
+{
+    "responseHeader": {
+        "status": 0,
+        "QTime": 237,
+        "params": {
+            "query": "collection:(ace-comics OR fawcett-comics OR super-mystery-comics OR four-favorites-comics OR webofmystery-comics OR fawcett-beware-terror-tales OR captainmarveladventures OR fawcett-americas-greatest-comics) AND mediatype:texts",
+            "qin": "collection:(ace-comics OR fawcett-comics OR super-mystery-comics OR four-favorites-comics OR webofmystery-comics OR fawcett-beware-terror-tales OR captainmarveladventures OR fawcett-americas-greatest-comics) AND mediatype:texts",
+            "fields": "identifier,title,year,creator",
+            "wt": "json",
+            "sort": "downloads desc",
+            "rows": 4,
+            "start": 0
+        }
+    },
+    "response": {
+        "numFound": 1163,
+        "start": 0,
+        "docs": [
+            {
+                "identifier": "RockyLaneComicBooks",
+                "title": "Rocky Lane Comic Books"
+            },
+            {
+                "identifier": "MonteHaleWesternComics",
+                "title": "Monte Hale Western Comics"
+            },
+            {
+                "identifier": "atomic-war-01",
+                "title": "Atomic War Issue #1 (Ace Comics)",
+                "year": 1952
+            },
+            {
+                "identifier": "Captain_Marvel_Adventures_001_Reprint",
+                "title": "Captain Marvel Adventures 001 (Reprint)"
+            }
+        ]
+    }
+}

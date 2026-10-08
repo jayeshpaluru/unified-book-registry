@@ -1,0 +1,13 @@
+{
+  "name": "unified-book-registry",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node server/catalog.mjs",
+    "catalog": "node server/catalog.mjs",
+    "import:anna": "node server/import-anna.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser-smoke.mjs"
+  }
+}
