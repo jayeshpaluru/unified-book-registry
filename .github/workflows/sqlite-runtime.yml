@@ -1,0 +1,27 @@
+name: Build browser SQLite with full-text search
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: rhashimoto/wa-sqlite
+          ref: 96d91182bf958d1c9fce2d851f66198378d8dbf1
+          path: source
+      - uses: emscripten-core/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
+        with:
+          version: '4.0.23'
+      - name: Compile the pinned public source (no account credentials)
+        working-directory: source
+        run: make dist/wa-sqlite-async.mjs WASQLITE_EXTRA_DEFINES='-DSQLITE_ENABLE_FTS5'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sqlite-browser-fts5
+          path: source/dist/wa-sqlite-async.*
+          if-no-files-found: error
+          retention-days: 3
