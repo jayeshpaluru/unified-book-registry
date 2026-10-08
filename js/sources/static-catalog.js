@@ -44,7 +44,7 @@ export async function staticRequest(path, params = {}, init = {}) {
       const combined = new Map(data.map((record) => [record.id, record]));
       personal.forEach((record) => combined.set(record.id, record)); data = [...combined.values()];
     }
-    const scanlation = ['mangapill', 'weebcentral'].includes(provider);
+    const scanlation = ['mangapill', 'weebcentral', 'mangakatana'].includes(provider);
     const offset = provider === 'mangaupdates' ? (Number(params.page || 1) - 1) * 25 : scanlation ? (Number(params.page || 1) - 1) * 30 : Number(params.offset || 0);
     const limit = provider === 'mangaupdates' ? 25 : 30;
     const result = searchRecords(data, params.q, { offset, limit, type: params.type });
@@ -54,7 +54,7 @@ export async function staticRequest(path, params = {}, init = {}) {
     return scanlation ? { ...result, next: result.next === null ? null : Math.floor(result.next / 30) + 1 } : result;
   }
   const defaults = path.startsWith('mangadex/') ? { language: params.language || 'en', offset: params.offset || 0 }
-    : /^(?:mangapill|weebcentral)\/series\//.test(path) ? { offset: params.offset || 0 } : { page: params.page || 1 };
+    : /^(?:mangapill|weebcentral|mangakatana)\/series\//.test(path) ? { offset: params.offset || 0 } : { page: params.page || 1 };
   const key = `${path}?${new URLSearchParams(defaults)}`;
   const cached = index.details[key];
   if (cached) return load(cached);

@@ -93,11 +93,11 @@ export function createCatalogApi(store, { fetchImpl = fetch } = {}) {
     if (path === 'getcomics/search') return getComicsSearch(text, number(params, 'offset', 0, 0, 1000000), { fetchImpl });
     const comicPost = /^getcomics\/post\/(\d+)$/.exec(path);
     if (comicPost) return readers.getComicsPost(comicPost[1]);
-    const readerSearch = /^(mangapill|weebcentral)\/search$/.exec(path);
+    const readerSearch = /^(mangapill|weebcentral|mangakatana)\/search$/.exec(path);
     if (readerSearch) return readers.search(readerSearch[1], text, number(params, 'page', 1, 1, 10000));
-    const readerChapters = /^(mangapill|weebcentral)\/series\/([^/]+)\/chapters$/.exec(path);
+    const readerChapters = /^(mangapill|weebcentral|mangakatana)\/series\/([^/]+)\/chapters$/.exec(path);
     if (readerChapters) return readers.chapters(readerChapters[1], readerChapters[2], number(params, 'offset', 0, 0, 100000));
-    const readerPages = /^(mangapill|weebcentral)\/chapter\/([^/]+)\/pages$/.exec(path);
+    const readerPages = /^(mangapill|weebcentral|mangakatana)\/chapter\/([^/]+)\/pages$/.exec(path);
     if (readerPages) return readers.pages(readerPages[1], readerPages[2]);
     if (['comikey/search', 'webtoon/search'].includes(path)) {
       const offset = number(params, 'offset', 0, 0, 100000);

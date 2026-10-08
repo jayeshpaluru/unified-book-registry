@@ -80,6 +80,7 @@ export function renderComics(view) {
 
 export function renderManga(view) {
   return mountSourceTabs(view, {
+    mangakatana: { name: 'MangaKatana', mount: (host) => mountCatalogBrowse(host, 'mangakatana', { title: 'Manga' }) },
     mangapill: { name: 'MangaPill', mount: (host) => mountCatalogBrowse(host, 'mangapill', { title: 'Manga' }) },
     weebcentral: { name: 'Weeb Central', mount: (host) => mountCatalogBrowse(host, 'weebcentral', { title: 'Manga' }) },
     anna: { name: 'Anna’s Archive', mount: (host) => mountCatalogBrowse(host, 'anna', { title: 'Manga and comics', type: 'comic' }) },

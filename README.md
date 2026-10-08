@@ -6,11 +6,13 @@ A personal library and reader for books, comics and manga, with multiple catalog
 | --- | --- |
 | Books | Imported Anna’s Archive metadata, Project Gutenberg, TorBox, your files |
 | Comics | Imported Anna’s Archive comic metadata, GetComics, Internet Archive, TorBox, your files |
-| Manga | MangaPill, Weeb Central, Anna’s Archive manga/comic metadata, MangaDex, MangaUpdates, Comikey, WEBTOON, TorBox, your files |
+| Manga | MangaKatana, MangaPill, Weeb Central, Anna’s Archive manga/comic metadata, MangaDex, MangaUpdates, Comikey, WEBTOON, TorBox, your files |
 
-Catalog entries can be saved alongside imported files in your Library. Each section remembers your selected catalog. MangaPill, Weeb Central and MangaDex chapter manifests connect to the native reader. MangaUpdates tracks releases and credited groups, not chapter files. Comikey and WEBTOON remain metadata-only publisher directories. Batcave's unavailable catalog has been replaced by GetComics' public archive feed. No source cards, credits, chapter controls or download controls navigate to an external reader; unavailable files show an in-app error instead.
+Catalog entries can be saved alongside imported files in your Library. Each section remembers your selected catalog. MangaKatana, MangaPill, Weeb Central and MangaDex chapter manifests connect to the native reader. MangaUpdates tracks releases and credited groups, not chapter files. Comikey and WEBTOON remain metadata-only publisher directories. Batcave's unavailable catalog has been replaced by GetComics' public archive feed. No source cards, credits, chapter controls or download controls navigate to an external reader; unavailable files show an in-app error instead.
 
 Deployment checks on 2026-10-08 found restrictions that fixture tests cannot prove away: Weeb Central and GetComics reject GitHub-runner metadata requests with HTTP 403, and sampled MangaPill/Weeb Central images did not render from the Pages origin. Their cached directories remain available with a stale/error notice, but these reading/download paths are not end-to-end verified. GetComics can use its direct public browser feed where CORS is allowed; its Actions torrent/file resolver may fail before contacting TorBox. No referrer spoofing, anti-bot bypass or image relay is used to conceal those limits.
+
+MangaKatana supplies its normal anonymous chapter page URLs as literal data in the public HTML. The adapter parses that data without evaluating scripts, decrypting anything or modifying tokens. Image URLs are fetched fresh on demand, not stored in the checked-in catalog; **Retry** refreshes chapter links when supported. Local browser image delivery has been checked, but GitHub-runner-to-Pages delivery still requires a real public runtime check.
 
 ## Hosted static app
 
@@ -22,7 +24,7 @@ Your imported books, reading progress and library live in this browser’s Index
 
 ### Live catalogs and TorBox authentication
 
-`TORBOX_API_KEY` is stored only as a GitHub Actions repository secret, never in the site. TorBox does not currently permit direct browser API calls from this Pages origin. Live manga search/chapter metadata and private TorBox operations therefore run as on-demand Actions jobs, without a separately deployed backend. GetComics permits direct browser search of its public WordPress feed, with a cached snapshot as fallback. MangaPill and Weeb Central use anonymous public HTML metadata requests in Actions, without logins, anti-bot bypasses or copying chapter image bytes into Git.
+`TORBOX_API_KEY` is stored only as a GitHub Actions repository secret, never in the site. TorBox does not currently permit direct browser API calls from this Pages origin. Live manga search/chapter metadata and private TorBox operations therefore run as on-demand Actions jobs, without a separately deployed backend. GetComics permits direct browser search of its public WordPress feed, with a cached snapshot as fallback. MangaKatana, MangaPill and Weeb Central use anonymous public HTML metadata requests in Actions, without logins, anti-bot bypasses or copying chapter image bytes into Git.
 
 1. Create a **fine-grained GitHub token** scoped to this repository, with **Actions: read/write** and **Contents: read**.
 2. In **Settings → Live catalogs and TorBox**, connect that token as the repository owner. Do not enter the TorBox key in the app.
@@ -141,7 +143,7 @@ The Anna’s SQLite catalog is separate from the browser’s library. Library me
 | `UBR_CATALOG_HOST` | `127.0.0.1` |
 | `UBR_ALLOWED_ORIGINS` | Extra comma-separated exact app origins; localhost origins are already allowed |
 
-Change the preferred MangaDex translation language in Settings or the chapter list. MangaPill and Weeb Central expose English chapters; use the reader's LTR/RTL/scroll controls as needed. Provider availability varies; blocked or failed image loads show an in-app error with Retry. Externally hosted chapters never open another site. Provider errors and rate limits offer an explicit retry instead of automatically repeating failed requests.
+Change the preferred MangaDex translation language in Settings or the chapter list. MangaKatana, MangaPill and Weeb Central expose English chapters; use the reader's LTR/RTL/scroll controls as needed. Provider availability varies; blocked or failed image loads show an in-app error with Retry. Externally hosted chapters never open another site. Provider errors and rate limits offer an explicit retry instead of automatically repeating failed requests.
 
 ## Verify
 
@@ -156,4 +158,4 @@ npm run test:index
 
 The browser tests use Chromium (or `UBR_BROWSER_PATH`) and isolated profiles. `test:browser` covers the companion mode and reader. `test:site` tests the real static artifact at a nested Pages path, metadata imports, library migration, credential-safe backups, public provider tabs, actual fixture file/CBZ saves, PWA icons and mocked encrypted TorBox jobs. `test:index` uses real WASM SQLite over a disposable cross-origin range server, checks title/author/ISBN and comic searches, exercises mocked TorBox index selection, measures fetched bytes and verifies CORS/whole-file rejection. Downloads go only into disposable test profiles; no private account operation runs. Set `UBR_SITE_URL` to test the actual deployed site. None of these tests changes your personal library or catalog.
 
-Deployment uses `.github/workflows/pages.yml`. The read-only TorBox authentication and official metadata-cache checks are separate manual workflows. The count-only authentication check looks for combined Anna metadata in torrents, Web Downloads and Usenet; inaccessible collections are reported as unchecked, not empty. `node tools/runtime-smoke.mjs` uses authenticated `gh` CLI access to verify an actual encrypted TorBox list round trip without printing private file names or links. `node tools/save-catalog-snapshot.mjs` updates the checked-in public fallback after a successful catalog build.
+Deployment uses `.github/workflows/pages.yml`. The read-only TorBox authentication and official metadata-cache checks are separate manual workflows. The count-only authentication check looks for combined Anna metadata in torrents, Web Downloads and Usenet; inaccessible collections are reported as unchecked, not empty. `node tools/runtime-smoke.mjs` uses authenticated `gh` CLI access to verify an actual encrypted TorBox list round trip without printing private file names or links; this queries the private account and publishes encrypted results to Git history, so run it only with explicit approval for that operation. For an anonymous provider check without a TorBox operation, use `node tools/runtime-smoke.mjs --public --provider mangakatana --chapter one-piece.49~c1194 --render`; this renders the first public page from the Actions-produced manifest in the actual Pages reader. `node tools/save-catalog-snapshot.mjs` updates the checked-in public fallback after a successful catalog build.

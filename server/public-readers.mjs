@@ -1,15 +1,18 @@
 import { htmlText, htmlAttr, httpsUrl, mapGetComics } from '../js/sources/public-metadata.js';
+import { KATANA_ORIGIN, KATANA_SERIES_ID, KATANA_CHAPTER_ID, parseKatanaSeries, parseKatanaChapters, parseKatanaPages } from './mangakatana.mjs';
 
-export const READER_ORIGINS = { mangapill: 'https://mangapill.com', weebcentral: 'https://weebcentral.com' };
+export const READER_ORIGINS = { mangapill: 'https://mangapill.com', weebcentral: 'https://weebcentral.com', mangakatana: KATANA_ORIGIN };
 const NAMES = { mangapill: 'MangaPill', weebcentral: 'Weeb Central' };
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const inertMarkup = (html) => String(html).replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
 function checkId(provider, id, chapter = false) {
-  const valid = provider === 'mangapill' ? (chapter ? /^\d{1,9}-\d{1,15}$/ : /^\d{1,9}$/).test(id) : ULID.test(id);
+  const valid = provider === 'mangakatana' ? (chapter ? KATANA_CHAPTER_ID : KATANA_SERIES_ID).test(id)
+    : provider === 'mangapill' ? (chapter ? /^\d{1,9}-\d{1,15}$/ : /^\d{1,9}$/).test(id) : ULID.test(id);
   if (!READER_ORIGINS[provider] || !valid) throw new Error('Invalid manga provider reference.');
 }
 export function parseReaderSeries(provider, html) {
+  if (provider === 'mangakatana') return parseKatanaSeries(html);
   const origin = READER_ORIGINS[provider];
   if (!origin) throw new Error('Unknown manga provider.');
   const entries = new Map();
@@ -31,7 +34,8 @@ export function parseReaderSeries(provider, html) {
   }
   return [...entries.values()];
 }
-export function parseReaderChapters(provider, html) {
+export function parseReaderChapters(provider, html, seriesId) {
+  if (provider === 'mangakatana') return parseKatanaChapters(html, seriesId);
   const origin = READER_ORIGINS[provider];
   if (!origin) throw new Error('Unknown manga provider.');
   const entries = new Map();
@@ -48,6 +52,7 @@ export function parseReaderChapters(provider, html) {
   return [...entries.values()].sort((a, b) => a.chapter !== null && b.chapter !== null ? Number(a.chapter) - Number(b.chapter) : 0);
 }
 export function parseReaderPages(provider, html) {
+  if (provider === 'mangakatana') return parseKatanaPages(html);
   const origin = READER_ORIGINS[provider], pages = [];
   if (!origin) throw new Error('Unknown manga provider.');
   for (const [tag] of inertMarkup(html).matchAll(/<img\b[^>]*>/gi)) {
@@ -102,24 +107,26 @@ export function createPublicReaderClient({ fetchImpl = fetch } = {}) {
     getComicsPost,
     async search(provider, q = '', page = 1) {
       if (!READER_ORIGINS[provider] || !Number.isSafeInteger(page) || page < 1 || page > 10000 || q.length > 300) throw new Error('Invalid manga search.');
-      const url = new URL(provider === 'mangapill' ? '/search' : '/search/data', READER_ORIGINS[provider]);
-      url.search = new URLSearchParams(provider === 'mangapill' ? { q, type: 'manga', page } :
+      const katanaPath = q ? (page === 1 ? '/' : `/page/${page}`) : (page === 1 ? '/manga/' : `/manga/page/${page}`);
+      const url = new URL(provider === 'mangakatana' ? katanaPath : provider === 'mangapill' ? '/search' : '/search/data', READER_ORIGINS[provider]);
+      url.search = new URLSearchParams(provider === 'mangakatana' ? (q ? { search: q, search_by: 'book_name' } : { order: 'latest' }) : provider === 'mangapill' ? { q, type: 'manga', page } :
         { text: q, sort: q ? 'Best Match' : 'Popularity', order: 'Descending', adult: 'False', display_mode: 'Full Display', offset: (page - 1) * 32, limit: 32 });
       const html = await text(url, provider === 'weebcentral' ? { 'HX-Request': 'true' } : {});
       const items = parseReaderSeries(provider, html);
-      const next = provider === 'weebcentral' ? items.length === 32 : /rel=["']next["']/.test(html) || new RegExp(`[?&](?:amp;)?page=${page + 1}(?:[&"'])`).test(html);
+      const next = provider === 'weebcentral' ? items.length === 32 : provider === 'mangakatana'
+        ? new RegExp(`/page/${page + 1}(?:[/?"'])`).test(html) : /rel=["']next["']/.test(html) || new RegExp(`[?&](?:amp;)?page=${page + 1}(?:[&"'])`).test(html);
       return { items, total: items.length, next: next ? page + 1 : null };
     },
     async chapters(provider, id, offset = 0) {
       checkId(provider, id);
       if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) throw new Error('Invalid chapter offset.');
-      const url = new URL(provider === 'mangapill' ? `/manga/${id}` : `/series/${id}/full-chapter-list`, READER_ORIGINS[provider]);
-      const items = parseReaderChapters(provider, await text(url));
+      const url = new URL(provider === 'weebcentral' ? `/series/${id}/full-chapter-list` : `/manga/${id}`, READER_ORIGINS[provider]);
+      const items = parseReaderChapters(provider, await text(url), id);
       return { items: items.slice(offset, offset + 100), total: items.length, next: offset + 100 < items.length ? offset + 100 : null };
     },
     async pages(provider, id) {
       checkId(provider, id, true);
-      const url = new URL(provider === 'mangapill' ? `/chapters/${id}` : `/chapters/${id}/images?is_prev=False&reading_style=long_strip`, READER_ORIGINS[provider]);
+      const url = new URL(provider === 'mangakatana' ? `/manga/${id.replace('~', '/')}` : provider === 'mangapill' ? `/chapters/${id}` : `/chapters/${id}/images?is_prev=False&reading_style=long_strip`, READER_ORIGINS[provider]);
       return parseReaderPages(provider, await text(url, provider === 'weebcentral' ? { 'HX-Request': 'true' } : {}));
     },
   };

@@ -99,7 +99,7 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
     return entries;
   }, 'Series with scanlation releases; use live search for the full provider catalog.');
   const readerEntries = {};
-  for (const name of ['mangapill', 'weebcentral', 'getcomics']) {
+  for (const name of ['mangapill', 'weebcentral', 'mangakatana', 'getcomics']) {
     readerEntries[name] = await collect(name, async () => {
       const entries = new Map(); let cursor = name === 'getcomics' ? 0 : 1;
       for (let page = 0; page < pages; page++) {
@@ -162,7 +162,7 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
         await pause();
       }
     }
-    for (const provider of ['mangapill', 'weebcentral']) {
+    for (const provider of ['mangapill', 'weebcentral', 'mangakatana']) {
       if (manifest.providers[provider].status === 'stale') continue;
       for (const entry of readerEntries[provider].slice(0, 10)) {
         const path = `${provider}/series/${entry.id}/chapters`, params = new URLSearchParams({ offset: 0 });

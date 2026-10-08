@@ -22,6 +22,7 @@ export function mountImageReader(host, opts) {
   let spreads = [];
   let token = 0;
   let overlayTimer;
+  let disposed = false;
   const urls = new Map(); // page index -> Promise<url>
   let zoom = { s: 1, x: 0, y: 0 };
 
@@ -63,6 +64,27 @@ export function mountImageReader(host, opts) {
       }
     }
     for (let i = Math.max(0, lo); i <= Math.min(count - 1, hi); i++) load(i).catch(() => {});
+  }
+
+  let refreshing = false;
+  async function retryPages() {
+    if (refreshing || disposed) return;
+    refreshing = true;
+    try {
+      if (source.refresh) {
+        const target = mode === 'vertical' ? scroller.children[page] : view;
+        target.replaceChildren(h('div', { class: 'notice', role: 'status' }, 'Refreshing chapter page links…'));
+        await source.refresh();
+        if (disposed) return;
+        for (const promise of urls.values()) promise.then((url) => source.release(url), () => {});
+        urls.clear(); loadedVertical.clear();
+      }
+      if (mode === 'vertical') syncVertical(); else showSpread();
+    } catch (error) {
+      if (disposed) return;
+      const target = mode === 'vertical' ? scroller.children[page] : view;
+      target.replaceChildren(h('div', { class: 'notice' }, h('p', {}, error.message), h('button', { class: 'btn', onClick: retryPages }, 'Retry')));
+    } finally { refreshing = false; }
   }
 
   // ---- shared UI -----------------------------------------------------------
@@ -160,7 +182,7 @@ export function mountImageReader(host, opts) {
       if (mine !== token) return;
       view.replaceChildren(h('div', { class: 'notice' },
         h('p', {}, `Could not load page ${group[0] + 1}: ${e.message}`),
-        h('button', { class: 'btn', onClick: showSpread }, 'Retry')));
+        h('button', { class: 'btn', onClick: retryPages }, 'Retry')));
     }
   }
 
@@ -337,14 +359,14 @@ export function mountImageReader(host, opts) {
         img.onerror = () => {
           loadedVertical.delete(i);
           slot.replaceChildren(h('div', { class: 'notice' }, h('p', {}, `Page ${i + 1}: The image host did not provide a readable page.`),
-            h('button', { class: 'btn', onClick: syncVertical }, 'Retry')));
+            h('button', { class: 'btn', onClick: retryPages }, 'Retry')));
         };
         slot.replaceChildren(img);
       }).catch((e) => {
         loadedVertical.delete(i);
         slot.replaceChildren(h('div', { class: 'notice' },
           h('p', {}, `Page ${i + 1}: ${e.message}`),
-          h('button', { class: 'btn', onClick: syncVertical }, 'Retry')));
+          h('button', { class: 'btn', onClick: retryPages }, 'Retry')));
       });
     }
   }
@@ -372,6 +394,7 @@ export function mountImageReader(host, opts) {
   window.addEventListener('resize', onResize);
 
   function destroy() {
+    disposed = true;
     token++;
     clearTimeout(overlayTimer);
     clearTimeout(tapTimer);

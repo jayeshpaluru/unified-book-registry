@@ -48,7 +48,7 @@ async function execute() {
     }
     throw new Error('Unsupported TorBox operation.');
   }
-  if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases)|getcomics\/(?:search|post\/\d+)|(?:mangapill|weebcentral)\/(?:search|series\/[0-9A-Z]+\/chapters|chapter\/[0-9A-Z-]+\/pages))$/.test(path)) {
+  if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases)|getcomics\/(?:search|post\/\d+)|(?:mangapill|weebcentral)\/(?:search|series\/[0-9A-Z]+\/chapters|chapter\/[0-9A-Z-]+\/pages)|mangakatana\/(?:search|series\/[a-z\d.-]+\/chapters|chapter\/[a-z\d.~:-]+\/pages))$/.test(path)) {
     throw new Error('Unsupported live catalog operation.');
   }
   const store = openAnnaStore();

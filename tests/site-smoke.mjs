@@ -55,11 +55,11 @@ const browser = await browserSession({ intercept: async (request) => {
       : { id: 1, kind: 'torrents', ready: true, name: 'Private test library', files: [{ id: 0, name: 'Private test book.pdf', size: fileBytes.length }] }] };
     else if (inputs.path === 'torbox/download') data = { url: params.kind === 'webdl' ? 'https://cdn.example/fixture-comic.cbz' : 'https://cdn.example/private-test-book.pdf' };
     else if (inputs.path === 'torbox/add-getcomics') { assert.equal(params.postId, '123'); assert.equal(params.expectedUrl, 'https://getcomics.org/dls/fixture'); data = { id: 77, kind: 'webdl' }; }
-    else if (/^(mangapill|weebcentral)\//.test(inputs.path)) {
+    else if (/^(mangapill|weebcentral|mangakatana)\//.test(inputs.path)) {
       const provider = inputs.path.split('/')[0];
       if (inputs.path.endsWith('/search')) data = { items: [{ id: String(params.page || 1), title: `Live fixture page ${params.page || 1}`,
         source: provider, sourceName: provider }], next: Number(params.page || 1) === 1 ? 2 : null };
-      else if (inputs.path.endsWith('/chapters')) data = { items: [{ id: provider === 'mangapill' ? '99999-1000' : '01M3DVDYA933SQQ6703XQYMMGQ', chapter: '1', groups: [], source: provider }], total: 1, next: null };
+      else if (inputs.path.endsWith('/chapters')) data = { items: [{ id: provider === 'mangapill' ? '99999-1000' : provider === 'mangakatana' ? 'fixture.99999~c1' : '01M3DVDYA933SQQ6703XQYMMGQ', chapter: '1', groups: [], source: provider }], total: 1, next: null };
       else if (inputs.path.endsWith('/pages')) data = { pages: ['https://images.example/1.png', 'https://images.example/2.png'] };
       else throw new Error(`Unexpected public reader fixture: ${inputs.path}`);
     }
@@ -186,9 +186,9 @@ try {
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Download with TorBox (0.05 GB)").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("Submitted to TorBox")');
   assert.equal(dispatches, 6, 'All private operations were intercepted fixtures, not real Actions jobs.');
-  for (const provider of ['mangapill', 'weebcentral']) {
+  for (const provider of ['mangapill', 'weebcentral', 'mangakatana']) {
     await evaluate(`document.querySelectorAll('.sheet-backdrop').forEach(el => el.remove());
-      import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'${provider === 'mangapill' ? '99999' : '01J76XY7E9FNDZ1DBBM6PBJZZZ'}', title:'${provider} reader fixture',
+      import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'${provider === 'mangapill' ? '99999' : provider === 'mangakatana' ? 'fixture.99999' : '01J76XY7E9FNDZ1DBBM6PBJZZZ'}', title:'${provider} reader fixture',
         source:'${provider}',sourceName:'${provider}'}))`);
     await waitFor('!![...document.querySelectorAll(".chapter-list button")].find(b => b.textContent === "Download CBZ")');
     await evaluate('[...document.querySelectorAll(".chapter-list button")].find(b => b.textContent === "Download CBZ").click()');
@@ -213,6 +213,8 @@ try {
   await waitFor('document.querySelector("#view")?.textContent.includes("Live fixture page 2")');
   await evaluate('document.querySelector("[data-source=weebcentral]").click()');
   await waitFor('document.querySelectorAll("#view .card").length > 0 && document.querySelector(".catalog-tabs .on").textContent === "Weeb Central"');
+  await evaluate('document.querySelector("[data-source=mangakatana]").click()');
+  await waitFor('document.querySelectorAll("#view .card").length > 0 && document.querySelector(".catalog-tabs .on").textContent === "MangaKatana"');
   await evaluate(`document.querySelectorAll('.sheet-backdrop').forEach(el => el.remove());
     import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'123',title:'Comic reader fixture',type:'comic',source:'getcomics',sourceName:'GetComics',
       downloads:[{label:'DOWNLOAD NOW',url:'https://getcomics.org/dls/fixture'}]}))`);
@@ -227,14 +229,18 @@ try {
   assert.equal(await evaluate('document.querySelector(".ir-label").textContent'), '1 / 2');
   await evaluate('document.querySelector(".ir-top button").click()');
   await waitFor('!document.body.classList.contains("reading")');
-  assert.equal(dispatches, 17, 'New provider chapters, paginated searches and comic TorBox operations use fixture jobs only.');
+  assert.equal(dispatches, 20, 'New provider chapters, paginated searches and comic TorBox operations use fixture jobs only.');
   // Failed image decoding must produce an actionable in-app error, not a blank page.
   await evaluate(`import('${base}js/reader/image-reader.js').then(ui => {
     const host=document.createElement('div');host.id='blocked-reader-test';document.body.append(host);
-    window.blockedReader=ui.mountImageReader(host,{item:{title:'Blocked image fixture'},source:{count:1,getUrl:async()=> 'https://images.example/blocked.png',release(){}},onPage(){},onSettings(){},onClose(){}});
+    let fresh=false;window.refreshedPages=0;
+    window.blockedReader=ui.mountImageReader(host,{item:{title:'Blocked image fixture'},source:{count:1,getUrl:async()=> fresh ? 'https://images.example/refreshed.png' : 'https://images.example/blocked.png',release(){},async refresh(){fresh=true;window.refreshedPages++;}},onPage(){},onSettings(){},onClose(){}});
   })`);
   await waitFor('document.querySelector("#blocked-reader-test")?.textContent.includes("did not provide a readable page")');
   assert.equal(await evaluate('document.querySelectorAll("#blocked-reader-test a[href^=http]").length'), 0);
+  await evaluate('[...document.querySelectorAll("#blocked-reader-test button")].find(b=>b.textContent==="Retry").click()');
+  await waitFor('document.querySelector("#blocked-reader-test .ir-stage img")?.naturalWidth > 0');
+  assert.equal(await evaluate('window.refreshedPages'), 1, 'Retry refreshes an expired anonymous manifest, without external navigation.');
   await evaluate('window.blockedReader.destroy();document.querySelector("#blocked-reader-test").remove();location.hash="#/settings"');
   await waitFor(`!!document.querySelector('input[aria-label="GitHub session token"]')`);
   assert.equal(await evaluate('document.querySelectorAll("a[href^=http]").length'), 0);

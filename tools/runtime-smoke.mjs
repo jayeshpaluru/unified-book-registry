@@ -3,20 +3,32 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { webcrypto } from 'node:crypto';
 import { openSealedResult, to64 } from '../js/sources/github-jobs.js';
+import { mapPages as mangaDexPages } from '../js/sources/mangadex.js';
+import { KATANA_CHAPTER_ID } from '../server/mangakatana.mjs';
 const exec = promisify(execFile);
 const repo = 'jayeshpaluru/unified-book-registry';
 const publicOnly = process.argv.includes('--public');
+const providerPosition = process.argv.indexOf('--provider');
+const provider = providerPosition >= 0 ? process.argv[providerPosition + 1] : 'mangadex';
+const render = process.argv.includes('--render');
+if (!['mangadex', 'mangapill', 'weebcentral', 'mangakatana'].includes(provider) || (providerPosition >= 0 && !publicOnly)) {
+  throw new Error('Provider checks require --public and a supported manga provider.');
+}
 const chapterPosition = process.argv.indexOf('--chapter');
 const chapterId = chapterPosition >= 0 ? process.argv[chapterPosition + 1] : null;
-if (chapterId && (!publicOnly || !/^[a-f\d]{8}-[a-f\d-]{27}$/.test(chapterId))) throw new Error('Chapter checks must use --public and a valid MangaDex chapter ID.');
-const requestPath = chapterId ? `mangadex/chapter/${chapterId}/pages` : publicOnly ? 'mangadex/search' : 'torbox/list';
+const validChapter = provider === 'mangakatana' ? KATANA_CHAPTER_ID.test(chapterId) : provider === 'mangapill'
+  ? /^\d{1,9}-\d{1,15}$/.test(chapterId) : provider === 'weebcentral' ? /^[0-9A-HJKMNP-TV-Z]{26}$/.test(chapterId) : /^[a-f\d]{8}-[a-f\d-]{27}$/.test(chapterId);
+if (chapterPosition >= 0 && (!publicOnly || !validChapter)) throw new Error('Chapter checks require --public and a valid provider chapter reference.');
+if (render && (!publicOnly || !chapterId)) throw new Error('Rendering requires --public and --chapter.');
+const requestPath = chapterId ? `${provider}/chapter/${chapterId}/pages` : publicOnly ? `${provider}/search` : 'torbox/list';
+const params = chapterId ? {} : publicOnly ? (provider === 'mangadex' ? { q: 'Yotsuba', offset: 0 } : { q: 'One Piece', page: 1 }) : { kind: 'torrents' };
 const keys = await webcrypto.subtle.generateKey({ name: 'RSA-OAEP', modulusLength: 2048,
   publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, false, ['encrypt', 'decrypt']);
 const publicKey = to64(await webcrypto.subtle.exportKey('spki', keys.publicKey));
 const id = `${Date.now()}-${webcrypto.randomUUID()}`;
 await exec('gh', ['api', '--method', 'POST', `repos/${repo}/actions/workflows/runtime.yml/dispatches`,
   '-f', 'ref=main', '-f', `inputs[request_id]=${id}`, '-f', `inputs[path]=${requestPath}`,
-  '-f', `inputs[params]=${chapterId ? '{}' : publicOnly ? '{"q":"Yotsuba","offset":0}' : '{"kind":"torrents"}'}`, '-f', `inputs[public_key]=${publicKey}`]);
+  '-f', `inputs[params]=${JSON.stringify(params)}`, '-f', `inputs[public_key]=${publicKey}`]);
 console.log(`Dispatched encrypted ${publicOnly ? 'public catalog' : 'TorBox'} runtime check: ${id}`);
 const deadline = Date.now() + 8 * 60 * 1000;
 while (Date.now() < deadline) {
@@ -26,14 +38,33 @@ while (Date.now() < deadline) {
   if (response) {
     const envelope = JSON.parse(Buffer.from(response.content, 'base64').toString());
     const result = await openSealedResult(envelope, keys.privateKey);
-    if (result.requestId !== id || result.error) throw new Error(result.error || 'Response identity mismatch.');
+    if (result.requestId !== id || result.expiresAt < Date.now() || result.error) throw new Error(result.error || 'Response identity/expiry mismatch.');
     if (chapterId) {
-      const { chapter, baseUrl } = result.data;
-      const url = `${baseUrl}/data/${encodeURIComponent(chapter.hash)}/${encodeURIComponent(chapter.data[0])}`;
-      const page = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(30000) });
-      if (!page.ok || !page.headers.get('content-type')?.startsWith('image/')) throw new Error('MangaDex image server could not serve the available chapter.');
-      console.log(`Live chapter runtime passed: ${chapter.data.length} page references, first image HEAD ${page.status}. No chapter image body or TorBox account data downloaded.`);
-    } else console.log(publicOnly ? `Live public-catalog runtime passed: ${result.data.data.length} MangaDex results through an encrypted response. No TorBox account data queried.`
+      const pages = provider === 'mangadex' ? mangaDexPages(result.data) : result.data.pages;
+      if (!Array.isArray(pages) || !pages.length || pages.length > 2000) throw new Error('The public provider returned an invalid page manifest.');
+      if (render) {
+        const { browserSession } = await import('../tests/helpers/browser-session.mjs');
+        const browser = await browserSession(), base = process.env.UBR_SITE_URL || 'https://jayeshpaluru.github.io/unified-book-registry/';
+        try {
+          await browser.command('Page.navigate', { url: base });
+          await browser.waitFor('!!document.querySelector("#view h1")');
+          await browser.evaluate(`import(${JSON.stringify(new URL('js/reader/image-reader.js', base).href)}).then(ui => {
+            const host=document.createElement('div');host.id='public-provider-smoke';document.body.append(host);
+            const pages=${JSON.stringify(pages)};
+            window.publicReader=ui.mountImageReader(host,{item:{title:'Public provider smoke',mode:'ltr'},source:{count:pages.length,getUrl:async i=>pages[i],release(){}},onPage(){},onSettings(){},onClose(){}});
+          })`);
+          await browser.waitFor('document.querySelector("#public-provider-smoke .ir-stage img")?.naturalWidth > 0 || !!document.querySelector("#public-provider-smoke .notice")');
+          const proof = await browser.evaluate(`({rendered:!!document.querySelector('#public-provider-smoke .ir-stage img')?.naturalWidth,
+            pageLabel:document.querySelector('#public-provider-smoke .ir-label')?.textContent})`);
+          if (!proof.rendered || proof.pageLabel !== `1 / ${pages.length}`) throw new Error('The public runtime manifest did not render in the actual Pages reader.');
+          console.log(`Live ${provider} runtime and Pages reader passed: ${pages.length} public page references; first page rendered. No TorBox account operation performed.`);
+        } finally { await browser.close(); }
+      } else {
+        const page = await fetch(pages[0], { method: 'HEAD', signal: AbortSignal.timeout(30000) });
+        if (!page.ok || provider === 'mangadex' && !page.headers.get('content-type')?.startsWith('image/')) throw new Error('The image host could not serve the available chapter.');
+        console.log(`Live ${provider} chapter runtime passed: ${pages.length} page references, first image HEAD ${page.status}. No chapter image body or TorBox account data downloaded.`);
+      }
+    } else console.log(publicOnly ? `Live ${provider} catalog runtime passed: ${(result.data.data || result.data.items).length} public results through an encrypted response. No TorBox account data queried.`
       : `Live runtime passed: ${result.data.items.length} TorBox downloads returned through an encrypted response. Private names and links withheld.`);
     break;
   }

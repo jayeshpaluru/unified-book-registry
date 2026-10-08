@@ -78,8 +78,12 @@ async function mangaDexSource(item) {
 }
 
 async function scanlationSource(item) {
-  const pages = await scanlationPages(item.provider, item.chapterId);
-  return { count: pages.length, getUrl: async (i) => pages[i], release() {} };
+  let pages = await scanlationPages(item.provider, item.chapterId);
+  return { count: pages.length, getUrl: async (i) => pages[i], release() {}, async refresh() {
+    const next = await scanlationPages(item.provider, item.chapterId);
+    if (next.length !== pages.length) throw new Error('The chapter page count changed. Close and reopen this chapter.');
+    pages = next;
+  } };
 }
 
 const FACTORIES = { cbz: cbzSource, pdf: pdfSource, ia: iaSource, pse: pseSource, mangadex: mangaDexSource, scanlation: scanlationSource };

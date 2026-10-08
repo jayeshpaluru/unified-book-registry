@@ -232,6 +232,7 @@ export function mountCatalogBrowse(view, provider, { title, type } = {}) {
     getcomics: 'Search the GetComics archive catalog. Send a supported comic file to TorBox, then import and read it here.',
     mangapill: 'Browse MangaPill manga and English chapters. Connected chapters open in this app.',
     weebcentral: 'Browse Weeb Central manga, manhwa and manhua. Connected English chapters open in this app.',
+    mangakatana: 'Browse MangaKatana’s English manga directory. Chapters open in the native reader; live metadata needs your GitHub Actions session.',
   };
   const cleanup = mountBrowse(view, {
     title: title || names[provider], intro: intro[provider], placeholder: provider === 'anna' ? 'Title, author or ISBN' : 'Search series titles',
@@ -254,7 +255,7 @@ export function mountCatalogBrowse(view, provider, { title, type } = {}) {
       if (provider === 'anna' && !health.annaRecords) note.append(' Anna’s metadata has not been imported yet; this is not the complete shadow-library index.');
     } catch { note.append('Static catalog not yet built. ', h('a', { href: '#/settings' }, 'Settings')); }
   });
-  if (['mangadex', 'mangaupdates', 'mangapill', 'weebcentral'].includes(provider)) {
+  if (['mangadex', 'mangaupdates', 'mangapill', 'weebcentral', 'mangakatana'].includes(provider)) {
     const status = h('p', { class: 'muted', role: 'status' });
     const grid = h('div', { class: 'grid' });
     let liveText = '', liveCursor, liveGeneration = 0;
