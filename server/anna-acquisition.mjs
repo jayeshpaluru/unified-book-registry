@@ -67,3 +67,8 @@ export function acquisitionFailureStatus(error, stopRequested = false) {
   }
   return 'error';
 }
+
+export function completedShardIds(plan, store) {
+  return plan.files.filter(file => store.completedImport(`${plan.hash}:${file.index}`))
+    .map(file => file.shard).sort((a, b) => a - b);
+}

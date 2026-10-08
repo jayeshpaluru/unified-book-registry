@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords, acquisitionFailureStatus } from '../server/anna-acquisition.mjs';
+import { metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords, acquisitionFailureStatus, completedShardIds } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 
 const info = () => ({ name: 'public-metadata', hash: 'a'.repeat(40), files: [
@@ -79,4 +79,18 @@ test('Only intentional aborts become resumable pauses, not corruption or idle fa
   assert.equal(acquisitionFailureStatus(new DOMException('Stopped', 'AbortError'), true), 'paused');
   const cycle = new Error('Cycle'); cycle.cause = cycle;
   assert.equal(acquisitionFailureStatus(cycle, true), 'error');
+});
+
+test('Resumed progress includes every completed checkpoint, including lexically later source shards', () => {
+  const plan = metadataPlan(info());
+  plan.files.sort((a, b) => String(a.shard).localeCompare(String(b.shard)));
+  const store = openAnnaStore();
+  try {
+    for (const shard of [0, 8, 10]) {
+      const file = plan.files.find(file => file.shard === shard);
+      store.finishImport(`${plan.hash}:${file.index}`, 42);
+    }
+    store.finishImport(`different-snapshot:${plan.files.find(file => file.shard === 1).index}`, 42);
+    assert.deepEqual(completedShardIds(plan, store), [0, 8, 10]);
+  } finally { store.close(); }
 });

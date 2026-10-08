@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { torrentInfo } from '../server/torrent-metadata.mjs';
-import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords, acquisitionFailureStatus } from '../server/anna-acquisition.mjs';
+import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords, acquisitionFailureStatus, completedShardIds } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 import { importAnna } from '../server/import-anna.mjs';
 
@@ -112,7 +112,7 @@ async function run() {
     const storeConfiguration = store.configuration();
     console.log(`Local SQLite: ${(storeConfiguration.cacheKiB / 1024).toFixed(0)} MiB page-cache target; ${IMPORT_BATCH_SIZE.toLocaleString()} records per atomic batch; journal ${storeConfiguration.journalMode}; synchronous ${storeConfiguration.synchronous}.`);
     state = { snapshot: plan.snapshot, infoHash: plan.hash, pid: process.pid, aria2Pid: child.pid,
-      selectedBytes: plan.bytes, completedBytes: 0, records: store.total(), importedShards: [], status: 'starting',
+      selectedBytes: plan.bytes, completedBytes: 0, records: store.total(), importedShards: completedShardIds(plan, store), status: 'starting',
       storeConfiguration, importBatchSize: IMPORT_BATCH_SIZE };
     const save = async () => { state.updatedAt = new Date().toISOString(); await writeFile(statusFile, JSON.stringify(state, null, 2)); };
     async function rpc(method, params = []) {
@@ -138,14 +138,14 @@ async function run() {
         const actual = await lstat(path);
         if (!actual.isFile() || actual.size !== file.size) throw new Error('A completed shard is not a regular file with its pinned compressed length.');
         ensureDisk(); state.status = 'importing'; state.currentShard = file.shard; await save();
-        console.log(`Importing completed metadata shard ${file.shard + 1}/${plan.files.length} into local SQLite…`);
+        console.log(`Importing source shard ${file.shard} (${state.importedShards.length}/${plan.files.length} completed checkpoints) into local SQLite…`);
         let lastProgress = 0;
         const result = await importAnna(createReadStream(path), store, { filename: file.name, batchSize: IMPORT_BATCH_SIZE,
           signal: controller.signal, idleTimeoutMs: 300000, onProgress: (progress) => {
           if (stopped) throw new Error('Acquisition stopped; committed metadata batches are preserved.');
           if (Date.now() - lastProgress > 15000) {
             ensureDisk(); lastProgress = Date.now();
-            console.log(`Shard ${file.shard + 1}: ${progress.imported.toLocaleString()} imported; ${progress.total.toLocaleString()} catalog records.`);
+            console.log(`Source shard ${file.shard}: ${progress.imported.toLocaleString()} imported; ${progress.total.toLocaleString()} catalog records.`);
           }
         } });
         store.finishImport(key, verifiedShardRecords(result)); state.importedShards.push(file.shard); state.records = store.total();
