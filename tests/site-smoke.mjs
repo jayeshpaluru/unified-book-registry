@@ -5,7 +5,7 @@ import { resolve, extname, sep, join } from 'node:path';
 import { once } from 'node:events';
 import { browserSession } from './helpers/browser-session.mjs';
 import { sealResult } from '../server/sealed-result.mjs';
-import { unzipSync, strFromU8 } from '../vendor/fflate.js';
+import { unzipSync, zipSync, strFromU8 } from '../vendor/fflate.js';
 
 let server, localApiRequests = 0;
 let base = process.env.UBR_SITE_URL;
@@ -29,22 +29,40 @@ if (!base) {
 const replies = new Map(); let dispatches = 0;
 const fileBytes = Buffer.from('%PDF-1.4\nDownload fixture only.\n');
 const imageBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+const comicBytes = zipSync({ '01.png': imageBytes, '02.png': imageBytes });
 const chapterId = '93ea0d72-169d-4418-b48d-95091972a871';
 const browser = await browserSession({ intercept: async (request) => {
   const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-GitHub-Api-Version' };
   if (request.method === 'OPTIONS') return { status: 204, headers };
   const url = new URL(request.url);
-  if (url.hostname === 'cdn.example') return { headers: { ...headers, 'Content-Type': 'application/pdf' }, body: fileBytes };
-  if (url.hostname === 'images.example') return { headers: { ...headers, 'Content-Type': 'image/png' }, body: imageBytes };
+  if (url.hostname === 'cdn.example') return { headers: { ...headers, 'Content-Type': url.pathname.endsWith('.cbz') ? 'application/vnd.comicbook+zip' : 'application/pdf' }, body: url.pathname.endsWith('.cbz') ? comicBytes : fileBytes };
+  if (url.hostname === 'images.example') return { status: url.pathname.startsWith('/blocked') ? 403 : 200,
+    headers: { ...headers, 'Content-Type': url.pathname.startsWith('/blocked') ? 'text/html' : 'image/png' },
+    body: url.pathname.startsWith('/blocked') ? '<html>Unavailable fixture image</html>' : imageBytes };
+  if (url.hostname === 'getcomics.org') return { headers: { ...headers, 'X-WP-Total': '1', 'Access-Control-Expose-Headers': 'X-WP-Total' }, body: JSON.stringify([
+    { id: 123, title: { rendered: 'GetComics fixture (2026)' }, link: 'https://getcomics.org/other-comics/fixture/',
+      content: { rendered: '<a href="https://getcomics.org/dls/fixture">DOWNLOAD NOW</a>' } },
+  ]) };
   if (url.pathname === '/user') return { headers, body: JSON.stringify({ login: 'jayeshpaluru' }) };
   if (url.pathname.endsWith('/dispatches')) {
     dispatches++;
     const { inputs } = JSON.parse(request.postData);
+    const params = JSON.parse(inputs.params);
     let data;
-    if (inputs.path === 'torbox/list') data = { items: [{ id: 1, kind: 'torrents', ready: true, name: 'Private test library',
-      files: [{ id: 0, name: 'Private test book.pdf', size: fileBytes.length }] }] };
-    else if (inputs.path === 'torbox/download') data = { url: 'https://cdn.example/private-test-book.pdf' };
+    if (inputs.path === 'torbox/list') data = { items: [params.kind === 'webdl'
+      ? { id: 77, kind: 'webdl', ready: true, name: 'Fixture comic', files: [{ id: 0, name: 'Fixture comic.cbz', size: comicBytes.length }] }
+      : { id: 1, kind: 'torrents', ready: true, name: 'Private test library', files: [{ id: 0, name: 'Private test book.pdf', size: fileBytes.length }] }] };
+    else if (inputs.path === 'torbox/download') data = { url: params.kind === 'webdl' ? 'https://cdn.example/fixture-comic.cbz' : 'https://cdn.example/private-test-book.pdf' };
+    else if (inputs.path === 'torbox/add-getcomics') { assert.equal(params.postId, '123'); assert.equal(params.expectedUrl, 'https://getcomics.org/dls/fixture'); data = { id: 77, kind: 'webdl' }; }
+    else if (/^(mangapill|weebcentral)\//.test(inputs.path)) {
+      const provider = inputs.path.split('/')[0];
+      if (inputs.path.endsWith('/search')) data = { items: [{ id: String(params.page || 1), title: `Live fixture page ${params.page || 1}`,
+        source: provider, sourceName: provider }], next: Number(params.page || 1) === 1 ? 2 : null };
+      else if (inputs.path.endsWith('/chapters')) data = { items: [{ id: provider === 'mangapill' ? '99999-1000' : '01M3DVDYA933SQQ6703XQYMMGQ', chapter: '1', groups: [], source: provider }], total: 1, next: null };
+      else if (inputs.path.endsWith('/pages')) data = { pages: ['https://images.example/1.png', 'https://images.example/2.png'] };
+      else throw new Error(`Unexpected public reader fixture: ${inputs.path}`);
+    }
     else if (inputs.path.endsWith('/chapters')) data = { offset: 0, limit: 100, total: 1, data: [{ id: chapterId,
       attributes: { chapter: '1', pages: 2, translatedLanguage: 'en' },
       relationships: [{ type: 'scanlation_group', id: chapterId, attributes: { name: 'Fixture scans' } }] }] };
@@ -74,8 +92,10 @@ try {
     }
     throw new Error(`Browser did not save the fixture file: ${name}`);
   }
-  await command('Fetch.enable', { patterns: ['https://api.github.com/*', 'https://cdn.example/*', 'https://images.example/*'].map((urlPattern) => ({ urlPattern })) });
+  await command('Fetch.enable', { patterns: ['https://api.github.com/*', 'https://cdn.example/*', 'https://images.example/*', 'https://getcomics.org/wp-json/*'].map((urlPattern) => ({ urlPattern })) });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
+    // Exercise the bounded blob fallback here; direct-to-disk streams are unit-tested.
+    Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true });
     const migration = indexedDB.open('ubr', 1);
     migration.onupgradeneeded = () => { for (const [name, keyPath] of Object.entries({items:'id',sources:'id',blobs:null,settings:null}))
       migration.result.createObjectStore(name,keyPath?{keyPath}:undefined); };
@@ -98,13 +118,15 @@ try {
   await evaluate('document.querySelector("[data-source=comikey]").click()');
   await waitFor('document.querySelectorAll("#view .card").length > 0 && document.querySelector(".catalog-tabs .on").textContent === "Comikey"');
   await evaluate('document.querySelector(".card-main").click()');
-  await waitFor('document.querySelector(".sheet")?.textContent.includes("paid")');
+  await waitFor('document.querySelector(".sheet")?.textContent.includes("public chapter feed is not connected")');
+  assert.equal(await evaluate('document.querySelectorAll(".sheet a[href^=http]").length'), 0);
   await evaluate('document.querySelector(".sheet > button").click(); document.querySelector("[data-source=webtoon]").click()');
   await waitFor('document.querySelectorAll("#view .card").length > 0 && document.querySelector(".catalog-tabs .on").textContent === "WEBTOON"');
   await evaluate('location.hash = "#/comics"');
-  await waitFor('!!document.querySelector("[data-source=batcave]")');
-  await evaluate('document.querySelector("[data-source=batcave]").click()');
-  await waitFor('document.querySelector("#view")?.textContent.includes("backend is not connected")');
+  await waitFor('!!document.querySelector("[data-source=getcomics]")');
+  await evaluate('document.querySelector("[data-source=getcomics]").click()');
+  await waitFor('document.querySelector("#view .card-title")?.textContent === "GetComics fixture (2026)"');
+  assert.equal(await evaluate('!!document.querySelector("[data-source=batcave]")'), false);
   await evaluate('location.hash = "#/settings"');
   await waitFor(`!!document.querySelector('input[aria-label="GitHub session token"]')`);
   await evaluate(`const token = document.querySelector('input[aria-label="GitHub session token"]'); token.value = 'fake-gh-session-token'; token.closest('form').requestSubmit()`);
@@ -123,7 +145,8 @@ try {
   await evaluate('document.querySelector(".card-main").click()');
   await waitFor('!![...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Generate download link")');
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Generate download link").click()');
-  await waitFor(`!!document.querySelector('.sheet a[href="https://cdn.example/private-test-book.pdf"]')`);
+  await waitFor('!![...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Download to device")');
+  assert.equal(await evaluate('document.querySelectorAll(".sheet a[href^=http]").length'), 0);
   assert.equal(dispatches, 2);
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Download file").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("File download started")');
@@ -153,7 +176,8 @@ try {
       ui.openCatalogEntry(anna.mapRecord({_id:'md5:'+ 'b'.repeat(32),_source:{file_unified_data:{
         title_best:'',original_filename_best:'Anna download fixture',extension_best:'pdf',
         classifications_unified:{torrent:['fixture/library.torrent']}}}})))`);
-  assert.equal(await evaluate(`document.querySelector('a[href="https://annas-archive.pk/dyn/small_file/torrents/fixture/library.torrent"]')?.textContent`), 'Download torrent ↗');
+  assert.equal(await evaluate('[...document.querySelectorAll(".sheet button")].some(b => b.textContent === "Download torrent file")'), true);
+  assert.equal(await evaluate('document.querySelectorAll(".sheet a[href^=http]").length'), 0);
   assert.match(await evaluate('document.querySelector(".sheet").textContent'), /No catalog title was supplied/);
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Inspect torrent").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("Download with TorBox (0.05 GB)")');
@@ -162,6 +186,58 @@ try {
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Download with TorBox (0.05 GB)").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("Submitted to TorBox")');
   assert.equal(dispatches, 6, 'All private operations were intercepted fixtures, not real Actions jobs.');
+  for (const provider of ['mangapill', 'weebcentral']) {
+    await evaluate(`document.querySelectorAll('.sheet-backdrop').forEach(el => el.remove());
+      import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'${provider === 'mangapill' ? '99999' : '01J76XY7E9FNDZ1DBBM6PBJZZZ'}', title:'${provider} reader fixture',
+        source:'${provider}',sourceName:'${provider}'}))`);
+    await waitFor('!![...document.querySelectorAll(".chapter-list button")].find(b => b.textContent === "Download CBZ")');
+    await evaluate('[...document.querySelectorAll(".chapter-list button")].find(b => b.textContent === "Download CBZ").click()');
+    await waitFor('document.querySelector(".sheet")?.textContent.includes("CBZ download started")');
+    const archive = unzipSync(new Uint8Array(await downloaded(`${provider} reader fixture Ch. 1.cbz`)));
+    assert.deepEqual(Object.keys(archive), ['0001.png', '0002.png', 'ComicInfo.xml']);
+    assert.match(strFromU8(archive['ComicInfo.xml']), new RegExp(provider));
+    await evaluate('[...document.querySelectorAll(".chapter-list button")].find(b => b.textContent === "Read here").click()');
+    await waitFor('document.querySelector(".ir-stage img")?.naturalWidth > 0');
+    assert.equal(await evaluate('document.querySelector(".ir-label").textContent'), '1 / 2');
+    assert.equal(await evaluate('document.querySelectorAll(".ir a[href^=http]").length'), 0);
+    await evaluate('document.querySelector(".ir-top button").click()');
+    await waitFor('!document.body.classList.contains("reading")');
+  }
+  await evaluate(`location.hash='#/manga'`);
+  await waitFor('!!document.querySelector("[data-source=mangapill]")');
+  await evaluate('document.querySelector("[data-source=mangapill]").click()');
+  await waitFor('document.querySelectorAll("#view .card").length > 0 && document.querySelector(".catalog-tabs .on").textContent === "MangaPill"');
+  await evaluate('[...document.querySelectorAll("#view button")].find(b => b.textContent === "Search full provider live").click()');
+  await waitFor('document.querySelector("#view")?.textContent.includes("Live fixture page 1")');
+  await evaluate('[...document.querySelectorAll("#view button")].find(b => b.textContent === "More live results").click()');
+  await waitFor('document.querySelector("#view")?.textContent.includes("Live fixture page 2")');
+  await evaluate('document.querySelector("[data-source=weebcentral]").click()');
+  await waitFor('document.querySelectorAll("#view .card").length > 0 && document.querySelector(".catalog-tabs .on").textContent === "Weeb Central"');
+  await evaluate(`document.querySelectorAll('.sheet-backdrop').forEach(el => el.remove());
+    import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'123',title:'Comic reader fixture',type:'comic',source:'getcomics',sourceName:'GetComics',
+      downloads:[{label:'DOWNLOAD NOW',url:'https://getcomics.org/dls/fixture'}]}))`);
+  await waitFor('!![...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Send DOWNLOAD NOW to TorBox")');
+  await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Send DOWNLOAD NOW to TorBox").click()');
+  await waitFor('document.querySelector(".sheet")?.textContent.includes("Submitted. Check ready files")');
+  await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Check ready files").click()');
+  await waitFor('document.querySelector(".sheet")?.textContent.includes("Fixture comic.cbz · Read / download here")');
+  await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent.includes("Fixture comic.cbz · Read / download here")).click()');
+  await evaluate('[...document.querySelectorAll(".sheet button")].findLast(b => b.textContent === "Import and read").click()');
+  await waitFor('document.querySelector(".ir-stage img")?.naturalWidth > 0');
+  assert.equal(await evaluate('document.querySelector(".ir-label").textContent'), '1 / 2');
+  await evaluate('document.querySelector(".ir-top button").click()');
+  await waitFor('!document.body.classList.contains("reading")');
+  assert.equal(dispatches, 17, 'New provider chapters, paginated searches and comic TorBox operations use fixture jobs only.');
+  // Failed image decoding must produce an actionable in-app error, not a blank page.
+  await evaluate(`import('${base}js/reader/image-reader.js').then(ui => {
+    const host=document.createElement('div');host.id='blocked-reader-test';document.body.append(host);
+    window.blockedReader=ui.mountImageReader(host,{item:{title:'Blocked image fixture'},source:{count:1,getUrl:async()=> 'https://images.example/blocked.png',release(){}},onPage(){},onSettings(){},onClose(){}});
+  })`);
+  await waitFor('document.querySelector("#blocked-reader-test")?.textContent.includes("did not provide a readable page")');
+  assert.equal(await evaluate('document.querySelectorAll("#blocked-reader-test a[href^=http]").length'), 0);
+  await evaluate('window.blockedReader.destroy();document.querySelector("#blocked-reader-test").remove();location.hash="#/settings"');
+  await waitFor(`!!document.querySelector('input[aria-label="GitHub session token"]')`);
+  assert.equal(await evaluate('document.querySelectorAll("a[href^=http]").length'), 0);
   assert.equal(await evaluate(`import('${base}js/db.js').then(async db => {
     await db.setSetting('torboxApiKey', 'fixture-key-not-for-backup');
     const exportData = await db.exportMetadata();
@@ -174,8 +250,9 @@ try {
   assert.equal(await evaluate(`caches.match('${base}js/downloads.js').then(Boolean)`), true);
   assert.equal(await evaluate('document.querySelector(\'link[rel="apple-touch-icon"]\').href'), `${base}icons/registry-apple-touch-v2.png`);
   assert.equal(localApiRequests, 0, 'Static hosted catalogs must not call the localhost companion.');
+  assert.equal(await evaluate('document.querySelectorAll(".sheet-backdrop").length'), 0, 'No nested catalog dialog may remain over the reader or Settings.');
   assert.deepEqual(browser.exceptions, []);
-  console.log(`Static site smoke passed: ${base} — nested paths, provider catalogs, metadata import, encrypted fixture jobs, actual file/CBZ saves, Anna torrent controls, credential-safe backups and PWA icon/offline shell.`);
+  console.log(`Static site smoke passed: ${base} — multiple manga readers, paginated live search, comic TorBox import fixtures, no external-reader links, failed-image errors, file/CBZ saves, metadata imports, credential-safe backups and PWA offline shell.`);
 } finally {
   await browser.close();
   if (server) { server.close(); await once(server, 'close'); }

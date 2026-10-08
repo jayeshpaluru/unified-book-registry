@@ -2,7 +2,7 @@
 import { h } from '../ui/dom.js';
 import { clamp, debounce } from '../util.js';
 import { buildSpreads, spreadIndexOf, visualOrder, wantsSpread } from '../spread.js';
-import { sourceLink } from '../ui/catalog-view.js';
+import { sourceLink } from '../ui/links.js';
 
 const PRELOAD = 2;
 const MAX_ZOOM = 5;
@@ -151,7 +151,7 @@ export function mountImageReader(host, opts) {
       const imgs = visualOrder(group, rtl()).map((i) => {
         return h('img', { src: srcs[group.indexOf(i)], alt: `Page ${i + 1}` });
       });
-      await Promise.all(imgs.map((img) => img.decode().catch(() => {})));
+      await Promise.all(imgs.map((img) => img.decode().catch(() => { throw new Error('The image host did not provide a readable page. It may be unavailable or block this browser.'); })));
       if (mine !== token) return;
       view.className = `ir-view fit-${fit}${group.length > 1 ? ' two' : ''}`;
       view.replaceChildren(...imgs);
@@ -334,6 +334,11 @@ export function mountImageReader(host, opts) {
         if (!loadedVertical.has(i)) return;
         const img = h('img', { src, alt: `Page ${i + 1}` });
         img.onload = () => { slot.style.height = ''; };
+        img.onerror = () => {
+          loadedVertical.delete(i);
+          slot.replaceChildren(h('div', { class: 'notice' }, h('p', {}, `Page ${i + 1}: The image host did not provide a readable page.`),
+            h('button', { class: 'btn', onClick: syncVertical }, 'Retry')));
+        };
         slot.replaceChildren(img);
       }).catch((e) => {
         loadedVertical.delete(i);

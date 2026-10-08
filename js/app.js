@@ -33,6 +33,10 @@ async function route() {
   const [path, query = ''] = (location.hash.slice(2) || 'library').split('?');
   const [name, arg] = path.split('/');
 
+  // A file picker may be nested inside a catalog sheet. Navigation must close
+  // both layers so no catalog dialog remains over the native reader.
+  document.querySelectorAll('.sheet-backdrop').forEach((element) => element.remove());
+
   teardown?.();
   teardown = null;
   reader?.destroy();

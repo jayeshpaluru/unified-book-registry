@@ -7,6 +7,7 @@ import { iaItem, ensureItem } from '../items.js';
 import { renderLibrary } from './library.js';
 import { mountSourceTabs, mountCatalogBrowse } from './catalog-view.js';
 import { mountTorboxBrowse } from './torbox-view.js';
+import { sourceLink } from './links.js';
 
 function renderArchiveComics(view) {
   return mountBrowse(view, {
@@ -32,9 +33,8 @@ function renderArchiveComics(view) {
 function bookSheetBody(book) {
   return h('div', { class: 'menu' },
     h('p', {}, book.author),
-    h('p', { class: 'muted' }, 'Gutenberg does not allow browsers on other sites to download its files, so books open on gutenberg.org. To read one here, download the EPUB and use Import in the Library.'),
-    h('a', { class: 'btn', href: book.readUrl, target: '_blank', rel: 'noopener' }, 'Open on Gutenberg ↗'),
-    book.epubUrl && h('a', { class: 'btn', href: book.epubUrl, target: '_blank', rel: 'noopener' }, 'Download EPUB ↗'));
+    h('p', { class: 'muted' }, 'This is a catalog entry. Import an EPUB into your Library or connect a matching TorBox file to read it here. Some Gutenberg file hosts do not allow in-app browser downloads.'),
+    book.epubUrl && sourceLink('Download EPUB here', book.epubUrl, 'btn', `${book.title}.epub`));
 }
 
 function renderGutenberg(view, openSheet) {
@@ -55,21 +55,8 @@ function renderGutenberg(view, openSheet) {
   });
 }
 
-const OFFICIAL = [
-  ['MANGA Plus by Shueisha', 'https://mangaplus.shueisha.co.jp/'],
-  ['Shonen Jump', 'https://www.viz.com/shonenjump'],
-  ['Webtoon', 'https://www.webtoons.com/'],
-  ['Comikey', 'https://comikey.com/'],
-];
-
 async function renderLocalManga(view) {
   await renderLibrary(view, { fixedType: 'manga' });
-  view.append(
-    h('section', { class: 'official' },
-      h('h2', {}, 'Official free readers'),
-      h('p', { class: 'muted' }, 'Read on the publishers’ sites.'),
-      h('ul', { class: 'links' }, OFFICIAL.map(([name, href]) =>
-        h('li', {}, h('a', { href, target: '_blank', rel: 'noopener' }, `${name} ↗`))))));
 }
 
 export function renderBooks(view, openSheet) {
@@ -85,10 +72,7 @@ export function renderComics(view) {
   return mountSourceTabs(view, {
     anna: { name: 'Anna’s Archive', mount: (host) => mountCatalogBrowse(host, 'anna', { title: 'Comics', type: 'comic' }) },
     archive: { name: 'Internet Archive', mount: renderArchiveComics },
-    batcave: { name: 'Batcave', mount: (host) => {
-      host.replaceChildren(h('h1', {}, 'Batcave'), h('p', { class: 'muted' }, 'Batcave blocks automated catalog access. Its backend is not connected; open its own comics reader below.'),
-        h('a', { class: 'btn', href: 'https://batcave.biz/comix/', target: '_blank', rel: 'noopener noreferrer' }, 'Open Batcave comics ↗'));
-    } },
+    getcomics: { name: 'GetComics', mount: (host) => mountCatalogBrowse(host, 'getcomics', { title: 'Comics' }) },
     torbox: { name: 'TorBox', mount: (host) => mountTorboxBrowse(host, 'comic') },
     local: { name: 'Your comics', mount: (host) => renderLibrary(host, { fixedType: 'comic' }) },
   }, 'anna', 'comicsCatalog');
@@ -96,6 +80,9 @@ export function renderComics(view) {
 
 export function renderManga(view) {
   return mountSourceTabs(view, {
+    mangapill: { name: 'MangaPill', mount: (host) => mountCatalogBrowse(host, 'mangapill', { title: 'Manga' }) },
+    weebcentral: { name: 'Weeb Central', mount: (host) => mountCatalogBrowse(host, 'weebcentral', { title: 'Manga' }) },
+    anna: { name: 'Anna’s Archive', mount: (host) => mountCatalogBrowse(host, 'anna', { title: 'Manga and comics', type: 'comic' }) },
     mangadex: { name: 'MangaDex', mount: (host) => mountCatalogBrowse(host, 'mangadex', { title: 'Manga' }) },
     mangaupdates: { name: 'MangaUpdates', mount: (host) => mountCatalogBrowse(host, 'mangaupdates', { title: 'Manga' }) },
     comikey: { name: 'Comikey', mount: (host) => mountCatalogBrowse(host, 'comikey', { title: 'Manga' }) },

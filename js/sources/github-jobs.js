@@ -37,7 +37,7 @@ export async function openSealedResult(envelope, privateKey) {
 }
 
 export async function githubJob(path, params = {}, { signal, onProgress = () => {}, timeoutMs = 8 * 60 * 1000 } = {}) {
-  if (!hasGithubSession()) throw new Error('Live requests need a GitHub Actions session. Connect in Settings, or open the provider’s own reader.');
+  if (!hasGithubSession()) throw new Error('Live requests need a GitHub Actions session. Connect in Settings, or import a file to read locally.');
   const tokenAtStart = sessionToken;
   const keys = await crypto.subtle.generateKey({ name: 'RSA-OAEP', modulusLength: 2048,
     publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, false, ['encrypt', 'decrypt']);

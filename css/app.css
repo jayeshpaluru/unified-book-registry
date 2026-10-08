@@ -115,6 +115,8 @@ input[type=range] { flex: 1; min-width: 0; accent-color: var(--fg); }
 }
 .sheet h2 { margin: 0; text-transform: none; font-size: 17px; color: var(--fg); letter-spacing: 0; }
 .menu, .menu-group { display: grid; gap: 10px; }
+.download-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.download-control [role="status"] { flex-basis: 100%; font-size: 13px; }
 #toasts { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tab-h) + var(--sab) + 12px); z-index: 60; display: grid; gap: 8px; pointer-events: none; }
 .toast { background: #151515; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: 14px; justify-self: center; max-width: 560px; }
 

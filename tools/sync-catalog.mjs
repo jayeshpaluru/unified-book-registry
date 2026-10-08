@@ -10,7 +10,8 @@ import { mapSeries } from '../js/sources/mangaupdates.js';
 const pause = () => new Promise((resolve) => setTimeout(resolve, 550));
 const jsonFile = async (path, value) => { await mkdir(resolve(path, '..'), { recursive: true }); await writeFile(path, JSON.stringify(value)); };
 
-export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl = fetch, pages = 5, details = true } = {}) {
+export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl = fetch, pages = 5, details = true,
+  annaDb = process.env.UBR_ANNA_DB || ':memory:' } = {}) {
   await mkdir(output, { recursive: true });
   let previous, previousSource = 'local';
   const repository = process.env.GITHUB_REPOSITORY || 'jayeshpaluru/unified-book-registry';
@@ -25,7 +26,9 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
   }
   const manifest = { version: 1, updatedAt: new Date().toISOString(), providers: {}, details: {},
     runtime: { repo: process.env.GITHUB_REPOSITORY || 'jayeshpaluru/unified-book-registry', workflow: 'runtime.yml', branch: 'runtime-results' } };
-  const store = openAnnaStore(process.env.UBR_ANNA_DB || fileURLToPath(new URL('../data/anna.sqlite', import.meta.url)));
+  // Never open the ongoing full local import as a side effect of building Pages.
+  // Large indexes belong in separately connected storage, not a JSON snapshot.
+  const store = openAnnaStore(annaDb);
   const api = createCatalogApi(store, { fetchImpl });
   async function previousFile(path) {
     if (!/^[a-zA-Z0-9_./-]+$/.test(path) || path.split('/').includes('..')) throw new Error('Invalid previous catalog path.');
@@ -87,6 +90,21 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
     }
     return entries;
   }, 'Series with scanlation releases; use live search for the full provider catalog.');
+  const readerEntries = {};
+  for (const name of ['mangapill', 'weebcentral', 'getcomics']) {
+    readerEntries[name] = await collect(name, async () => {
+      const entries = new Map(); let cursor = name === 'getcomics' ? 0 : 1;
+      for (let page = 0; page < pages; page++) {
+        const result = await api(`${name}/search`, new URLSearchParams(name === 'getcomics' ? { offset: cursor } : { page: cursor }));
+        result.items.forEach((entry) => entries.set(entry.id, entry));
+        cursor = result.next;
+        if (cursor === null) break;
+        await pause();
+      }
+      return [...entries.values()];
+    }, name === 'getcomics' ? 'Recent public archive listings; direct live search covers the provider feed. Files are retrieved through TorBox.'
+      : 'Public manga directory snapshot; live Actions search covers the provider directory. English chapters read here.');
+  }
   async function html(url) {
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(25000) });
     if (!response.ok) throw new Error(`Public catalog returned HTTP ${response.status}.`);
@@ -109,12 +127,11 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
     return items;
   }, 'Current-day English Originals directory, not every WEBTOON series.');
   await collect('anna', async () => {
+    if (store.total() > 10000) throw new Error('The full Anna index must not be published as Pages JSON. Connect a finalized storage index instead.');
     const entries = [];
     for (let offset = 0; offset < store.total(); offset += 500) entries.push(...store.search('', { offset, limit: 500 }).items);
     return entries;
   }, 'Imported combined aarecord metadata only; no full mirror is bundled.');
-  manifest.providers.batcave = { status: 'external', records: 0, files: [],
-    error: 'Batcave blocks automated catalog access. Use its own reader; no backend access has been obtained.' };
   if (details) {
     for (const [key, path] of Object.entries(previous?.details || {})) {
       try { await jsonFile(join(output, path), await previousFile(path)); manifest.details[key] = path; } catch {}
@@ -129,6 +146,16 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
           await jsonFile(join(output, file), value);
           manifest.details[`${path}?${params}`] = file;
         } catch (error) { console.log(`${provider} release metadata unavailable: ${error.message}`); }
+        await pause();
+      }
+    }
+    for (const provider of ['mangapill', 'weebcentral']) {
+      for (const entry of readerEntries[provider].slice(0, 10)) {
+        const path = `${provider}/series/${entry.id}/chapters`, params = new URLSearchParams({ offset: 0 });
+        try {
+          const value = await api(path, params), file = `details/${provider}/${entry.id}.json`;
+          await jsonFile(join(output, file), value); manifest.details[`${path}?${params}`] = file;
+        } catch (error) { console.log(`${provider} chapter metadata unavailable: ${error.message}`); }
         await pause();
       }
     }

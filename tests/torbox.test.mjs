@@ -26,6 +26,20 @@ test('TorBox rejects links containing the API key and validates file references'
   await assert.rejects(client.download('invalid', 1, 0), /Invalid TorBox/);
   await assert.rejects(client.download('torrents', -1, 0), /Invalid TorBox/);
 });
+test('Comic web downloads submit a resolved file through the server-only TorBox API without exposing its key', async () => {
+  const calls = [], client = createTorboxClient('private-test-key', { fetchImpl: async (url, init) => {
+    calls.push({ url, init }); return new Response(JSON.stringify({ success: true, data: { webdownload_id: 42 } }));
+  } });
+  assert.equal(await client.addWebDownload('https://fs3.comicfiles.ru/fixture.cbz'), 42);
+  assert.equal(new URL(calls[0].url).pathname, '/v1/api/webdl/createwebdownload');
+  assert.equal(calls[0].init.method, 'POST'); assert.equal(calls[0].init.body.get('link'), 'https://fs3.comicfiles.ru/fixture.cbz');
+  assert.equal(calls[0].init.body.get('as_queued'), 'false', 'A selected comic starts normally instead of waiting in the hourly queue.');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer private-test-key'); assert.doesNotMatch(String(calls[0].url), /private-test-key/);
+  await assert.rejects(client.addWebDownload('http://files.example/x'), /Invalid/);
+  await assert.rejects(client.addWebDownload('https://user:pass@files.example/x'), /Invalid/);
+  await assert.rejects(client.addWebDownload('https://api.torbox.app/x'), /Invalid/);
+  assert.equal(calls.length, 1);
+});
 
 test('Count-only Anna discovery covers Web Downloads and Usenet without exposing account data', async () => {
   const calls = [];

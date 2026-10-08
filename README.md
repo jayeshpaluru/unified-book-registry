@@ -4,23 +4,23 @@ A personal library and reader for books, comics and manga, with multiple catalog
 
 | Section | Catalogs |
 | --- | --- |
-| Books | Imported Anna’s Archive metadata, Project Gutenberg, your files |
-| Comics | Imported Anna’s Archive comic metadata, Internet Archive, your files |
-| Manga | MangaDex, MangaUpdates scanlation releases, Comikey, WEBTOON, TorBox, your files |
+| Books | Imported Anna’s Archive metadata, Project Gutenberg, TorBox, your files |
+| Comics | Imported Anna’s Archive comic metadata, GetComics, Internet Archive, TorBox, your files |
+| Manga | MangaPill, Weeb Central, Anna’s Archive manga/comic metadata, MangaDex, MangaUpdates, Comikey, WEBTOON, TorBox, your files |
 
-Catalog entries can be saved alongside imported files in your Library. Each section remembers your selected catalog. Comikey and WEBTOON open their official readers; chapter access may include free previews and paid unlocks. MangaUpdates tracks releases and credited groups, not chapter files. Batcave is an external link only: automated catalog access is blocked and its backend has not been connected.
+Catalog entries can be saved alongside imported files in your Library. Each section remembers your selected catalog. MangaPill, Weeb Central and MangaDex chapter manifests connect to the native reader. MangaUpdates tracks releases and credited groups, not chapter files. Comikey and WEBTOON remain metadata-only publisher directories. Batcave's unavailable catalog has been replaced by GetComics' public archive feed. No source cards, credits, chapter controls or download controls navigate to an external reader; unavailable files show an in-app error instead.
 
 ## Hosted static app
 
 Site: <https://jayeshpaluru.github.io/unified-book-registry/>
 
-The hosted app does not need a localhost server. GitHub Actions builds browser-searchable public catalog snapshots and deploys an explicitly allowlisted static artifact to Pages. Catalogs refresh daily and on main-branch updates. A checked-in public metadata snapshot provides a fallback if a provider is temporarily unavailable. Coverage and freshness are shown in Settings; these snapshots are not entire provider databases.
+The hosted app does not need a localhost server. GitHub Actions builds browser-searchable public catalog snapshots and deploys an explicitly allowlisted static artifact to Pages. Catalogs refresh daily and on main-branch updates. A checked-in public metadata snapshot provides a fallback if a provider is temporarily unavailable. Coverage and freshness are shown in Settings; these snapshots are not entire provider databases. Pages builds use an empty Anna store by default and refuse to export large local indexes as JSON, leaving the ongoing full import untouched.
 
 Your imported books, reading progress and library live in this browser’s IndexedDB. They are not uploaded to GitHub, TorBox or another server. Metadata backups do not contain imported file blobs, separately imported Anna metadata, OPDS passwords or credential settings.
 
 ### Live catalogs and TorBox authentication
 
-`TORBOX_API_KEY` is stored only as a GitHub Actions repository secret, never in the site. TorBox does not currently permit direct browser API calls from this Pages origin. Live MangaDex/MangaUpdates requests and private TorBox operations therefore run as on-demand Actions jobs, without a separately deployed backend.
+`TORBOX_API_KEY` is stored only as a GitHub Actions repository secret, never in the site. TorBox does not currently permit direct browser API calls from this Pages origin. Live manga search/chapter metadata and private TorBox operations therefore run as on-demand Actions jobs, without a separately deployed backend. GetComics permits direct browser search of its public WordPress feed, with a cached snapshot as fallback. MangaPill and Weeb Central use anonymous public HTML metadata requests in Actions, without logins, anti-bot bypasses or copying chapter image bytes into Git.
 
 1. Create a **fine-grained GitHub token** scoped to this repository, with **Actions: read/write** and **Contents: read**.
 2. In **Settings → Live catalogs and TorBox**, connect that token as the repository owner. Do not enter the TorBox key in the app.
@@ -28,13 +28,13 @@ Your imported books, reading progress and library live in this browser’s Index
 
 The GitHub token stays only in memory and is forgotten when the tab reloads. Each request creates a non-exportable RSA-OAEP private key in the browser. Jobs encrypt responses using AES-256-GCM and wrap the AES key with that session’s public key. Only ciphertext is committed to the `runtime-results` branch; no private account responses or download links are logged or published in the site. Generated response files are bounded to 50 and one day of retention; encrypted history can remain in Git. Result contents expire after 45 minutes. Keep repository write access restricted to trusted people.
 
-Expect workflow startup time, usually 20–60 seconds; this is a batch-job runtime, not a low-latency API. Expired file links must be regenerated. Browser imports are capped at 200 MB in the TorBox UI; larger files should be downloaded and imported manually. File-server browser restrictions may also require manual import. CBR/RAR must be converted to CBZ. TorBox cache retention is not permanent storage; use AirLock where available and retain independent backups.
+Expect workflow startup time, usually 20–60 seconds; this is a batch-job runtime, not a low-latency API. Live manga searches include **More live results**, not just a fixed first page. Expired file links must be regenerated. Browser imports are capped at 200 MB. **Download to device** streams larger files straight to disk where `showSaveFilePicker` is supported; other browsers retain the 200 MB download cap. All remote downloads require the file host to allow CORS. Unsupported hosts do not trigger external navigation. CBR/RAR must be converted to CBZ. TorBox cache retention is not permanent storage; use AirLock where available and retain independent backups.
 
 ### Download controls and PWA icon
 
-Local library files can be downloaded unchanged from their item menu. MangaDex-hosted chapters can be saved as ordered CBZ archives with source/group credits; external chapters keep their source-reader links. Public, unrestricted Internet Archive PDF, EPUB and CBZ files are offered where available. Publisher catalogs are not treated as universally free downloads.
+Local library files can be downloaded unchanged from their item menu. Connected manga chapters offer ordered CBZ saves with source credits, subject to image-host CORS; MangaDex group credits are preserved. Externally hosted MangaDex chapters are marked unavailable in this reader. Public, unrestricted Internet Archive PDF, EPUB and CBZ files are offered where available. Publisher catalogs are not treated as universally free downloads. Image rendering does not require CORS, but fetching images to assemble a CBZ does: a successful chapter manifest is not proof that every image or download is available.
 
-TorBox files offer a fresh direct link and a bounded browser download. Anna records retain safe torrent mappings when present in the imported metadata. Inspect a mapped torrent before explicitly submitting it to TorBox: **the whole torrent is queued, not just one book**. Packs may contain many files, account limits still apply, and nested archives require manual extraction. Matching existing TorBox files uses a record hash or mapped file path, not guessed titles. Records without torrent mappings still link to their Anna source page. Metadata never guarantees an available book download or bypasses protected endpoints.
+TorBox files offer fresh temporary links used by in-app download/import controls. GetComics archive choices can be explicitly submitted through TorBox Web Downloads, checked for readiness, and imported into this reader. The Actions resolver refetches the public post, checks the chosen link has not changed and follows only trusted HTTPS HEAD redirects; it does not fetch comic archive bytes. This private account path is fixture-tested, not yet verified against a real account. Anna records retain safe torrent mappings when present in the imported metadata. Inspect a mapped torrent before explicitly submitting it to TorBox: **the whole torrent is queued, not just one book**. Packs may contain many files, account limits still apply, and nested archives require manual extraction. Matching existing TorBox files uses a record hash or mapped file path, not guessed titles. Records without torrent mappings remain metadata-only until a file is imported. Metadata never guarantees an available book download or bypasses protected endpoints.
 
 The generated black-and-white open-book icon is used for the favicon, Apple touch icon and installable PWA, including an opaque maskable version. The original master and exact built-in image-generation prompt are preserved in [icons/registry-master-v2.png](icons/registry-master-v2.png) and [tools/icon-spec.json](tools/icon-spec.json). Tests verify dimensions and mask-safe padding.
 
@@ -134,12 +134,12 @@ The Anna’s SQLite catalog is separate from the browser’s library. Library me
 
 | Environment variable | Default / purpose |
 | --- | --- |
-| `UBR_ANNA_DB` | Project-relative `data/anna.sqlite`; shared by the service and CLI importer |
+| `UBR_ANNA_DB` | Project-relative `data/anna.sqlite` for the service/importer; `sync:catalog` instead defaults to an empty in-memory store |
 | `UBR_CATALOG_PORT` | `8787` |
 | `UBR_CATALOG_HOST` | `127.0.0.1` |
 | `UBR_ALLOWED_ORIGINS` | Extra comma-separated exact app origins; localhost origins are already allowed |
 
-Change the preferred MangaDex translation language in Settings or the chapter list. MangaDex availability depends on the provider; unavailable chapters are omitted and externally hosted chapters open at their source. Provider errors and rate limits offer an explicit retry instead of automatically repeating failed requests.
+Change the preferred MangaDex translation language in Settings or the chapter list. MangaPill and Weeb Central expose English chapters; use the reader's LTR/RTL/scroll controls as needed. Provider availability varies; blocked or failed image loads show an in-app error with Retry. Externally hosted chapters never open another site. Provider errors and rate limits offer an explicit retry instead of automatically repeating failed requests.
 
 ## Verify
 

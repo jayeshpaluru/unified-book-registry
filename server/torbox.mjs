@@ -26,10 +26,20 @@ export function createTorboxClient(token, { fetchImpl = fetch } = {}) {
     async addTorrent(bytes) {
       if (!(bytes instanceof Uint8Array) || !bytes.byteLength || bytes.byteLength > 8 * 1024 * 1024) throw new Error('Invalid torrent metadata.');
       const body = new FormData(); body.set('file', new Blob([bytes], { type: 'application/x-bittorrent' }), 'download.torrent');
-      body.set('seed', '0'); body.set('allow_zip', 'false'); body.set('as_queued', 'true');
+      body.set('seed', '3'); body.set('allow_zip', 'false'); body.set('as_queued', 'true');
       const result = await request('torrents/createtorrent', {}, { method: 'POST', body });
       const id = result?.torrent_id ?? result?.id;
       if (!Number.isSafeInteger(id) || id < 0) throw new Error('TorBox returned no submission ID. Check its dashboard before trying again.');
+      return id;
+    },
+    async addWebDownload(value) {
+      let url;
+      try { url = new URL(value); } catch { throw new Error('Invalid web-download URL.'); }
+      if (url.protocol !== 'https:' || url.username || url.password || url.hostname === 'api.torbox.app') throw new Error('Invalid web-download URL.');
+      const body = new FormData(); body.set('link', url.href); body.set('as_queued', 'false');
+      const result = await request('webdl/createwebdownload', {}, { method: 'POST', body });
+      const id = result?.webdownload_id ?? result?.web_id ?? result?.id;
+      if (!Number.isSafeInteger(id) || id < 0) throw new Error('TorBox returned no submission ID. Check your account before submitting again.');
       return id;
     },
     async list(kind = 'torrents') {

@@ -72,7 +72,7 @@ export async function catalogSettings() {
     connect, state,
     h('div', { class: 'import' }, importButton, file), importState,
     h('p', { class: 'muted' }, 'Import combined aarecord/Elasticsearch JSON or JSONL, optionally gzip-compressed. Browser imports stay on this device and are separate from library backups. Zstandard needs the local CLI.'),
-    h('a', { href: 'https://annas-archive.pk/datasets', target: '_blank', rel: 'noopener noreferrer' }, 'Anna’s Archive metadata sources ↗'),
+    h('p', { class: 'muted' }, 'Metadata source: annas-archive.pk/datasets'),
     h('label', { class: 'field' }, h('span', {}, 'Preferred MangaDex translation language (e.g. en, es, pt-br)'), lang));
   const token = h('input', { type: 'password', autocomplete: 'off', autocapitalize: 'off', spellcheck: false,
     placeholder: 'Repository-scoped GitHub token', 'aria-label': 'GitHub session token' });
@@ -82,7 +82,7 @@ export async function catalogSettings() {
   const signIn = h('button', { type: 'submit', class: 'btn' }, 'Connect for this tab');
   section.append(h('h2', {}, 'Live catalogs and TorBox'),
     h('p', { class: 'muted' }, 'Create a fine-grained GitHub token for this repository only, with Actions: read/write and Contents: read. The token stays in memory, is excluded from backups, and is forgotten when this tab reloads. Never enter your TorBox key here.'),
-    h('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener noreferrer' }, 'Create a repository-scoped GitHub token ↗'),
+    h('p', { class: 'muted' }, 'GitHub token setup is in your GitHub account’s Settings → Developer settings → Personal access tokens.'),
     h('form', { onSubmit: async (event) => {
       event.preventDefault(); signIn.disabled = true; session.textContent = 'Checking GitHub access…';
       try {
@@ -94,7 +94,7 @@ export async function catalogSettings() {
     h('label', { class: 'field' }, h('span', {}, 'GitHub session token (not your TorBox key)'), token), signIn,
     h('button', { type: 'button', class: 'btn', onClick: () => { forgetGithubSession(); session.textContent = 'Session forgotten.'; token.value = ''; } }, 'Forget session')),
     session, h('p', { class: 'muted' }, 'Actions requests usually take 20–60 seconds to start. Private results are encrypted for this browser session before being stored in the public repo.'),
-    h('a', { href: `https://github.com/${DEFAULT_REPO}/actions`, target: '_blank', rel: 'noopener noreferrer' }, 'Workflow status ↗'));
+    h('p', { class: 'muted' }, `Workflow status is available in the Actions tab of ${DEFAULT_REPO}.`));
   section.append(annaIndexSettings(check));
   check();
   return section;

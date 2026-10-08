@@ -4,6 +4,7 @@ import { openArchive } from '../zip.js';
 import { loadPdfjs } from '../lib.js';
 import { loadPages } from '../sources/archive.js';
 import { loadPages as mangaDexPages } from '../sources/mangadex.js';
+import { loadPages as scanlationPages } from '../sources/scanlations.js';
 import { pseUrl, authHeaders } from '../sources/opds.js';
 import * as db from '../db.js';
 
@@ -76,6 +77,11 @@ async function mangaDexSource(item) {
   return { count: pages.length, getUrl: async (i) => pages[i], release() {} };
 }
 
-const FACTORIES = { cbz: cbzSource, pdf: pdfSource, ia: iaSource, pse: pseSource, mangadex: mangaDexSource };
+async function scanlationSource(item) {
+  const pages = await scanlationPages(item.provider, item.chapterId);
+  return { count: pages.length, getUrl: async (i) => pages[i], release() {} };
+}
+
+const FACTORIES = { cbz: cbzSource, pdf: pdfSource, ia: iaSource, pse: pseSource, mangadex: mangaDexSource, scanlation: scanlationSource };
 
 export const openPageSource = (item) => FACTORIES[item.format](item);

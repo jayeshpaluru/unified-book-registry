@@ -49,6 +49,13 @@ export const chapterItem = (series, chapter) => remote({
   mode: series.originalLanguage === 'ja' ? 'rtl' : 'vertical',
 });
 
+export const scanlationItem = (series, chapter) => remote({
+  id: `${series.source}:${chapter.id}`, type: 'manga', format: 'scanlation', provider: series.source, chapterId: chapter.id,
+  title: `${series.title} · ${chapter.chapter != null ? `Ch. ${chapter.chapter}` : chapter.title || 'Oneshot'}`,
+  seriesTitle: series.title, coverUrl: series.cover, sourceName: series.sourceName,
+  scanlationGroups: chapter.groups || [], mode: 'rtl',
+});
+
 export async function ensureItem(item) {
   const existing = await db.getItem(item.id);
   if (existing) return existing;

@@ -6,6 +6,8 @@ import { openAnnaStore } from './anna-store.mjs';
 import { importAnna } from './import-anna.mjs';
 import { parseComikey, parseWebtoon } from './public-catalogs.mjs';
 import { searchRecords } from '../js/sources/catalog-search.js';
+import { createPublicReaderClient } from './public-readers.mjs';
+import { directSearch as getComicsSearch } from '../js/sources/getcomics.js';
 
 export const APP_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -46,6 +48,7 @@ export function mangaDexSearchUrl(text, offset) {
 
 export function createCatalogApi(store, { fetchImpl = fetch } = {}) {
   const cache = new Map();
+  const readers = createPublicReaderClient({ fetchImpl });
   let importing = false;
   async function upstream(url, body) {
     const key = `${url}:${body ? JSON.stringify(body) : ''}`;
@@ -87,6 +90,15 @@ export function createCatalogApi(store, { fetchImpl = fetch } = {}) {
       return store.search(text, { offset: number(params, 'offset', 0, 0, Number.MAX_SAFE_INTEGER), type });
     }
     if (path === 'mangadex/search') return upstream(mangaDexSearchUrl(text, number(params, 'offset', 0, 0, 9970)));
+    if (path === 'getcomics/search') return getComicsSearch(text, number(params, 'offset', 0, 0, 1000000), { fetchImpl });
+    const comicPost = /^getcomics\/post\/(\d+)$/.exec(path);
+    if (comicPost) return readers.getComicsPost(comicPost[1]);
+    const readerSearch = /^(mangapill|weebcentral)\/search$/.exec(path);
+    if (readerSearch) return readers.search(readerSearch[1], text, number(params, 'page', 1, 1, 10000));
+    const readerChapters = /^(mangapill|weebcentral)\/series\/([^/]+)\/chapters$/.exec(path);
+    if (readerChapters) return readers.chapters(readerChapters[1], readerChapters[2], number(params, 'offset', 0, 0, 100000));
+    const readerPages = /^(mangapill|weebcentral)\/chapter\/([^/]+)\/pages$/.exec(path);
+    if (readerPages) return readers.pages(readerPages[1], readerPages[2]);
     if (['comikey/search', 'webtoon/search'].includes(path)) {
       const offset = number(params, 'offset', 0, 0, 100000);
       const url = path === 'comikey/search' ? `https://comikey.com/comics/?${new URLSearchParams({ q: text, page: Math.floor(offset / 30) + 1 })}`

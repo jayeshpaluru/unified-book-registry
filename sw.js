@@ -11,6 +11,7 @@ const SHELL_FILES = [
   'js/app.js', 'js/db.js', 'js/util.js', 'js/pages.js', 'js/zip.js', 'js/spread.js', 'js/lib.js', 'js/items.js', 'js/importers.js', 'js/downloads.js',
   'js/sources/archive.js', 'js/sources/gutendex.js', 'js/sources/opds.js',
   'js/sources/catalog-api.js', 'js/sources/anna.js', 'js/sources/mangadex.js', 'js/sources/mangaupdates.js',
+  'js/sources/scanlations.js', 'js/sources/getcomics.js', 'js/sources/public-metadata.js', 'js/ui/getcomics-downloads.js',
   'js/sources/static-catalog.js', 'js/sources/catalog-search.js', 'js/sources/browser-metadata.js', 'js/sources/github-jobs.js', 'js/sources/publishers.js',
   'js/sources/anna-index.js', 'js/sources/anna-index-worker.js', 'js/index/queries.js', 'js/index/range-reader.js', 'js/index/http-vfs.js',
   'js/reader/image-reader.js', 'js/reader/book-reader.js', 'js/reader/page-source.js',

@@ -17,8 +17,7 @@ export function mountTorboxBrowse(view, type) {
     h('p', { class: 'muted' }, 'Private file browsing and fresh download links run through authenticated GitHub Actions. The TorBox key never reaches this page.'),
     h('div', { class: 'import' }, collection, load, h('a', { class: 'btn', href: '#/settings' }, 'Connect GitHub session')),
     input, status, grid,
-    h('p', { class: 'muted' }, 'TorBox is cached storage, not a permanent backup. Use AirLock where available and keep a separate backup.'),
-    sourceLink('Open TorBox dashboard ↗', 'https://torbox.app/dashboard'));
+    h('p', { class: 'muted' }, 'TorBox is cached storage, not a permanent backup. Use AirLock where available and keep a separate backup.'));
 
   async function refresh() {
     if (!hasGithubSession()) { status.textContent = 'Connect a repository-scoped GitHub token in Settings, then load your library.'; return; }
@@ -55,10 +54,10 @@ export function mountTorboxBrowse(view, type) {
           try {
             const bytes = await readDownloadBytes(url, { onProgress: (size) => { state.textContent = `Downloading ${(size / 1024 / 1024).toFixed(1)} MB…`; } });
             saveBlob(new Blob([bytes]), filename); state.textContent = 'File download started. The link was not saved.';
-          } catch (error) { state.textContent = error instanceof TypeError ? 'Browser download was blocked. Use Open fresh download, then save the file.' : error.message; }
+          } catch (error) { state.textContent = error instanceof TypeError ? 'The file server does not allow in-app browser downloads.' : error.message; }
           finally { save.disabled = false; }
         } }, 'Download file');
-        actions.replaceChildren(sourceLink('Open fresh download ↗', url, 'btn', filename), file.size <= 200 * 1024 * 1024 && save);
+        actions.replaceChildren(sourceLink('Download to device', url, 'btn', filename), file.size <= 200 * 1024 * 1024 && save);
         if (!read) { state.textContent = 'This temporary link stays only in this browser session.'; return; }
         if (file.size > 200 * 1024 * 1024) throw new Error('For files over 200 MB, download and import manually to avoid exhausting browser memory.');
         state.textContent = 'Importing the file into your local browser library…';
@@ -67,7 +66,7 @@ export function mountTorboxBrowse(view, type) {
         if (result.errors.length) throw new Error(result.errors.join(' '));
         close(); location.hash = `#/read/${encodeURIComponent(result.added[0].id)}`;
       } catch (error) {
-        state.textContent = error instanceof TypeError ? 'TorBox’s file server blocked browser import. Use the download link, then Import files in Library.' : error.message;
+        state.textContent = error instanceof TypeError ? 'TorBox’s file server does not allow in-app browser import.' : error.message;
       } finally { button.disabled = readButton.disabled = !file.ready; }
     };
     const button = h('button', { class: 'btn', disabled: !file.ready, onClick: () => fetchLink(false) }, 'Generate download link');

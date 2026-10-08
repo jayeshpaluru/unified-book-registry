@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { unzipSync } from '../vendor/fflate.js';
-import { safeFilename, chapterCbz, readDownloadBytes } from '../js/downloads.js';
+import { safeFilename, chapterCbz, readDownloadBytes, saveRemoteFile } from '../js/downloads.js';
 import { mapDownloads } from '../js/sources/archive.js';
 import { mapRecord } from '../js/sources/anna.js';
 import { torrentUrl, matchingTorboxFiles } from '../js/sources/anna-downloads.js';
@@ -32,6 +32,44 @@ test('Downloads reject excessive bodies, empty data, invalid schemes and HTML ma
   await assert.rejects(chapterCbz(['https://example.com'], { fetchImpl: async () => new Response('<html>blocked</html>') }), /non-image/);
   const controller = new AbortController(); controller.abort();
   await assert.rejects(chapterCbz(['https://example.com'], { signal: controller.signal }), /abort/i);
+});
+test('Large remote files stream directly into a chosen file without an in-memory limit or navigation', async () => {
+  const writes = [], progress = []; let closed = false, aborted = false;
+  const size = await saveRemoteFile('https://cdn.example/archive.cbz', '../archive.cbz', {
+    picker: async (options) => { assert.equal(options.suggestedName, '-archive.cbz'); return { createWritable: async () => ({
+      write: async (bytes) => writes.push([...bytes]), close: async () => { closed = true; }, abort: async () => { aborted = true; },
+    }) }; },
+    fetchImpl: async (url, init) => {
+      assert.equal(init.credentials, 'omit'); assert.equal(init.referrerPolicy, 'no-referrer');
+      return new Response(new ReadableStream({ start(c) { c.enqueue(new Uint8Array([1, 2])); c.enqueue(new Uint8Array([3])); c.close(); } }),
+        { headers: { 'Content-Length': String(500 * 1024 * 1024) } });
+    }, onProgress: (n) => progress.push(n), save: () => assert.fail('The streamed file must not create a blob.'),
+  });
+  assert.equal(size, 3); assert.deepEqual(writes, [[1, 2], [3]]); assert.deepEqual(progress, [2, 3]); assert.equal(closed, true); assert.equal(aborted, false);
+});
+test('Cancelled or failed streamed files abort the pending save instead of keeping a corrupt partial file', async () => {
+  for (const failure of ['empty', 'http', 'cancel']) {
+    let aborted = false, closed = false; const controller = new AbortController();
+    await assert.rejects(saveRemoteFile('https://cdn.example/archive.cbz', 'archive.cbz', {
+      signal: controller.signal, picker: async () => ({ createWritable: async () => ({ write: async () => {},
+        close: async () => { closed = true; }, abort: async () => { aborted = true; } }) }),
+      fetchImpl: async () => new Response(failure === 'empty' ? '' : 'bytes', { status: failure === 'http' ? 403 : 200 }),
+      onProgress: () => controller.abort(),
+    }), failure === 'cancel' ? /abort/i : failure === 'empty' ? /empty/ : /403/);
+    assert.equal(aborted, true); assert.equal(closed, false);
+  }
+  let fetched = false;
+  await assert.rejects(saveRemoteFile('https://cdn.example/archive.cbz', 'archive.cbz', { picker: async () => { throw new DOMException('Picker cancelled', 'AbortError'); },
+    fetchImpl: async () => { fetched = true; } }), /cancelled/);
+  assert.equal(fetched, false);
+});
+test('Browsers without a file picker use bounded same-origin blob saves without external navigation', async () => {
+  let saved;
+  await saveRemoteFile('https://cdn.example/file.txt', 'file.txt', { picker: null, fetchImpl: async () => new Response('fixture'),
+    save: (blob, filename) => { saved = { blob, filename }; } });
+  assert.equal(saved.filename, 'file.txt'); assert.equal(await saved.blob.text(), 'fixture');
+  await assert.rejects(saveRemoteFile('https://cdn.example/large.cbz', 'large.cbz', { picker: null,
+    fetchImpl: async () => new Response('tiny', { headers: { 'Content-Length': String(500 * 1024 * 1024) } }), save: () => assert.fail('Oversized file saved') }), /limit/);
 });
 test('Archive download choices omit private files, restricted items and path traversal', () => {
   const metadata = { files: [{ name: 'public.pdf', size: '12' }, { name: 'private.epub', private: 'true' }, { name: '../escape.cbz' }, { name: 'image.jpg' }] };
@@ -73,7 +111,7 @@ test('TorBox torrent submission keeps credentials server-side and uses a bounded
     assert.equal(new URL(url).pathname, '/v1/api/torrents/createtorrent');
     assert.equal(new URL(url).search, ''); assert.equal(init.method, 'POST');
     assert.equal(init.headers.Authorization, 'Bearer private-test-key');
-    assert.equal(init.body.get('seed'), '0'); assert.equal(init.body.get('as_queued'), 'true');
+    assert.equal(init.body.get('seed'), '3', 'TorBox documents 3 as no seeding.'); assert.equal(init.body.get('as_queued'), 'true');
     assert.equal(init.body.get('allow_zip'), 'false'); assert.equal(await init.body.get('file').text(), 'public torrent');
     return new Response(JSON.stringify({ success: true, data: { torrent_id: 42 } }));
   } });

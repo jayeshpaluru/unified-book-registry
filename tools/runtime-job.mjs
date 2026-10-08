@@ -3,6 +3,7 @@ import { openAnnaStore } from '../server/anna-store.mjs';
 import { createTorboxClient } from '../server/torbox.mjs';
 import { sealResult } from '../server/sealed-result.mjs';
 import { fetchAnnaTorrent, submitAnnaTorrent } from '../server/anna-downloads.mjs';
+import { resolveGetComicsDownload } from '../server/public-readers.mjs';
 
 const requestId = process.env.REQUEST_ID || '';
 const publicKey = process.env.SESSION_PUBLIC_KEY || '';
@@ -41,9 +42,13 @@ async function execute() {
     }
     if (path === 'torbox/download') return { url: await client.download(params.kind || 'torrents', params.id, params.fileId) };
     if (path === 'torbox/add-anna') return submitAnnaTorrent(client, params.torrentPath, params.expectedHash);
+    if (path === 'torbox/add-getcomics') {
+      const file = await resolveGetComicsDownload(params.postId, Number(params.index), { expectedUrl: params.expectedUrl });
+      return { id: await client.addWebDownload(file.url), kind: 'webdl' };
+    }
     throw new Error('Unsupported TorBox operation.');
   }
-  if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases))$/.test(path)) {
+  if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases)|getcomics\/(?:search|post\/\d+)|(?:mangapill|weebcentral)\/(?:search|series\/[0-9A-Z]+\/chapters|chapter\/[0-9A-Z-]+\/pages))$/.test(path)) {
     throw new Error('Unsupported live catalog operation.');
   }
   const store = openAnnaStore();

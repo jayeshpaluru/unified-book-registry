@@ -17,7 +17,7 @@ export function annaDownloadOptions(entry) {
       const matches = matchingTorboxFiles(entry, data.items);
       results.replaceChildren(...matches.map((file) => h('button', { class: 'btn', disabled: !file.ready, onClick: () => fileActions(entry, file) },
         `${file.name.split('/').pop()} · ${(file.size / 1e6).toFixed(1)} MB · ${file.ready ? 'Download' : 'Not ready'}`)));
-      status.textContent = matches.length ? `${matches.length} matching file(s).` : 'No matching files in this collection. Submit a mapped torrent below, or open Anna’s source record for other mirrors.';
+      status.textContent = matches.length ? `${matches.length} matching file(s).` : 'No matching files in this collection. Submit a mapped torrent below, or import a file into your Library.';
     } catch (error) { status.textContent = error.message; }
     finally { find.disabled = false; }
   } }, 'Find file in TorBox');
@@ -25,7 +25,7 @@ export function annaDownloadOptions(entry) {
     h('div', { class: 'import' }, collection, find), status, results);
   for (const torrent of entry.torrents || []) {
     const state = h('p', { class: 'muted', role: 'status' });
-    const actions = h('div', { class: 'import' }, sourceLink('Download torrent ↗', torrentUrl(torrent.path)));
+    const actions = h('div', { class: 'import' }, sourceLink('Download torrent file', torrentUrl(torrent.path), 'btn', torrent.path.split('/').pop()));
     const inspect = h('button', { class: 'btn', onClick: async () => {
       if (!hasGithubSession()) { state.textContent = 'Connect your GitHub session in Settings first.'; return; }
       inspect.disabled = true; state.textContent = 'Inspecting public torrent metadata…';
@@ -47,27 +47,28 @@ export function annaDownloadOptions(entry) {
     } }, 'Inspect torrent');
     actions.append(inspect); body.append(h('div', {}, h('p', {}, torrent.collection || torrent.path.split('/').pop()), actions, state));
   }
-  if (!entry.torrents?.length) body.append(h('p', { class: 'muted' }, 'No torrent mapping was included in this record. Anna’s source page may offer other downloads.'));
+  if (!entry.torrents?.length) body.append(h('p', { class: 'muted' }, 'No torrent mapping was included in this record. It can be saved as metadata, but a file must be imported before it can be read here.'));
   return body;
 }
-function fileActions(entry, file) {
+export function fileActions(entry, file) {
   const extension = /^[a-z\d]{1,8}$/i.test(entry.extension || '') ? entry.extension.toLowerCase() : '';
-  const filename = safeFilename(entry.title, extension);
+  const filename = file.name ? safeFilename(file.name.split('/').pop()) : safeFilename(entry.title, extension);
   const status = h('p', { class: 'muted', role: 'status' }), links = h('div', { class: 'import' });
   async function getFile(read) {
     download.disabled = readButton.disabled = true;
     try {
       status.textContent = 'Generating a temporary download link…';
       const { url } = await githubJob('torbox/download', { kind: file.kind, id: file.downloadId, fileId: file.id });
-      links.replaceChildren(sourceLink('Open direct download ↗', url, 'btn', filename));
-      if (file.size > 200 * 1024 * 1024) { status.textContent = 'Use the direct download for files above 200 MB, then import manually.'; return; }
+      links.replaceChildren(sourceLink('Download to device', url, 'btn', filename));
+      if (file.size > 200 * 1024 * 1024) { status.textContent = read ? 'This file exceeds the in-memory browser import limit.'
+        : 'Use Download to device below to stream this file where supported. Importing into the reader is limited to 200 MB.'; return; }
       const bytes = await readDownloadBytes(url, { onProgress: (size) => { status.textContent = `Downloading ${(size / 1e6).toFixed(1)} MB…`; } });
       if (read) {
         const result = await importFiles([new File([bytes], filename)], entry.type || 'book');
         if (result.errors.length || !result.added.length) throw new Error(result.errors.join(' ') || 'The file could not be imported.');
         close(); location.hash = `#/read/${encodeURIComponent(result.added[0].id)}`;
       } else { saveBlob(new Blob([bytes]), filename); status.textContent = 'File download started. No temporary link was persisted.'; }
-    } catch (error) { status.textContent = error instanceof TypeError ? 'The file server blocked browser access. Use the direct download link.' : error.message; }
+    } catch (error) { status.textContent = error instanceof TypeError ? 'The file server does not allow in-app browser access.' : error.message; }
     finally { download.disabled = readButton.disabled = false; }
   }
   const download = h('button', { class: 'btn', onClick: () => getFile(false) }, 'Download file');

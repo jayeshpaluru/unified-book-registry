@@ -13,21 +13,52 @@ export function saveBlob(blob, filename) {
   document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+// Pick the destination while the user's click is still active. Stream to disk
+// without buffering the whole file; browsers without this API retain a cap.
+export async function saveRemoteFile(url, filename, { fetchImpl = fetch, signal, onProgress = () => {},
+  picker = globalThis.showSaveFilePicker?.bind(globalThis), save = saveBlob } = {}) {
+  const parsed = new URL(url);
+  if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('Invalid download URL.');
+  if (!picker) {
+    const bytes = await readDownloadBytes(url, { fetchImpl, signal, onProgress });
+    save(new Blob([bytes]), filename); return bytes.byteLength;
+  }
+  const handle = await picker({ suggestedName: safeFilename(filename) });
+  const writable = await handle.createWritable();
+  const idle = new AbortController(); let timer, reader, size = 0;
+  const arm = () => { clearTimeout(timer); timer = setTimeout(() => idle.abort(new Error('The file download made no progress for 60 seconds.')), 60000); };
+  try {
+    arm();
+    const response = await fetchImpl(parsed.href, { signal: signal ? AbortSignal.any([signal, idle.signal]) : idle.signal,
+      credentials: 'omit', referrerPolicy: 'no-referrer' });
+    if (!response.ok) throw new Error(`File download returned HTTP ${response.status}.`);
+    if (!response.body) throw new Error('The source returned no file.');
+    reader = response.body.getReader();
+    while (true) {
+      signal?.throwIfAborted();
+      const { done, value } = await reader.read(); if (done) break;
+      await writable.write(value); size += value.byteLength; arm(); onProgress(size);
+    }
+    if (!size) throw new Error('The source returned an empty file.');
+    await writable.close(); return size;
+  } catch (error) { await writable.abort().catch(() => {}); throw error; }
+  finally { clearTimeout(timer); await reader?.cancel().catch(() => {}); }
+}
 export async function readDownloadBytes(url, { maxBytes = MAX_DOWNLOAD_BYTES, fetchImpl = fetch, signal, onProgress = () => {} } = {}) {
   const parsed = new URL(url);
   if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('Invalid download URL.');
-  const response = await fetchImpl(parsed.href, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120000)]) : AbortSignal.timeout(120000), referrerPolicy: 'no-referrer' });
+  const response = await fetchImpl(parsed.href, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120000)]) : AbortSignal.timeout(120000), credentials: 'omit', referrerPolicy: 'no-referrer' });
   if (!response.ok) throw new Error(`File download returned HTTP ${response.status}.`);
   if (!response.body) throw new Error('The source returned no file.');
   if (Number(response.headers.get('content-length')) > maxBytes) {
-    await response.body.cancel(); throw new Error('This file exceeds the browser download limit. Use the direct source link.');
+    await response.body.cancel(); throw new Error('This file exceeds the 200 MB in-memory browser download limit.');
   }
   const reader = response.body.getReader(), chunks = []; let size = 0;
   try {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.byteLength;
-      if (size > maxBytes) throw new Error('This file exceeds the browser download limit. Use the direct source link.');
+      if (size > maxBytes) throw new Error('This file exceeds the in-memory browser download limit.');
       chunks.push(value); onProgress(size);
     }
   } finally { await reader.cancel().catch(() => {}); }
