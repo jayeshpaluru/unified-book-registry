@@ -1,0 +1,7 @@
+{
+  "tool": "built-in image generation",
+  "prompt": "Use case: logo-brand. Asset type: production website favicon and installable PWA icon for Unified Book Registry, a personal library for books, comics and manga. Primary request: one original clean open-book symbol, minimal and immediately readable at tiny sizes. Style: crisp flat geometric graphic, bold white page shapes with a clearly defined black central spine and balanced negative space, no thin strokes or fine page lines. Background: solid pure black, full-bleed opaque square. Match an existing pure-black and white app interface. Composition: one centered symbol occupying roughly 60 percent of the canvas width, generous even margins, all essential shapes inside the central 70 percent so circular and squircle masks do not crop them. Straight-on view, no perspective, no 3D, no gradients, no shadows, no border, no tile mockup. No text, letters, numbers, extra symbols, watermark, or recognizable third-party branding. Square raster master, ideally 1024 by 1024.",
+  "master": "icons/registry-master-v2.png",
+  "background": "#000000",
+  "safeZone": "Essential mark inside central 80%-diameter maskable circle"
+}

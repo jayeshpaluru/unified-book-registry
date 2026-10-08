@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -9,6 +9,7 @@ export async function browserSession({ intercept } = {}) {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/chromium', '/usr/bin/google-chrome'].find(existsSync);
   if (!path) throw new Error('Set UBR_BROWSER_PATH to a Chromium executable.');
   const profile = mkdtempSync(join(tmpdir(), 'ubr-static-smoke-'));
+  const downloadPath = join(profile, 'downloads'); mkdirSync(downloadPath);
   const child = spawn(path, ['--headless=new', '--no-first-run', '--disable-background-networking', '--disable-extensions',
     '--disable-default-apps', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   const endpoint = await new Promise((resolve, reject) => {
@@ -38,6 +39,7 @@ export async function browserSession({ intercept } = {}) {
     }
   });
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+  await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath });
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
   const command = (method, params) => send(method, params, sessionId);
   await command('Runtime.enable'); await command('Page.enable');
@@ -47,7 +49,7 @@ export async function browserSession({ intercept } = {}) {
     if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
     return response.result.value;
   }
-  return { command, evaluate, exceptions, async waitFor(expression) {
+  return { command, evaluate, exceptions, downloadPath, async waitFor(expression) {
     const deadline = Date.now() + 20000;
     while (Date.now() < deadline) { if (await evaluate(expression)) return; await new Promise((resolve) => setTimeout(resolve, 100)); }
     throw new Error(`UI wait timed out: ${expression}\n${await evaluate('document.body.innerText')}`);

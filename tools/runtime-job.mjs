@@ -2,6 +2,7 @@ import { createCatalogApi } from '../server/catalog.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 import { createTorboxClient } from '../server/torbox.mjs';
 import { sealResult } from '../server/sealed-result.mjs';
+import { fetchAnnaTorrent, submitAnnaTorrent } from '../server/anna-downloads.mjs';
 
 const requestId = process.env.REQUEST_ID || '';
 const publicKey = process.env.SESSION_PUBLIC_KEY || '';
@@ -26,6 +27,10 @@ async function execute() {
   let params;
   try { params = JSON.parse(process.env.REQUEST_PARAMS || '{}'); } catch { throw new Error('Invalid request parameters.'); }
   if (!params || Array.isArray(params) || typeof params !== 'object') throw new Error('Invalid request parameters.');
+  if (path === 'anna/torrent-info') {
+    const { info } = await fetchAnnaTorrent(params.torrentPath);
+    return { hash: info.hash, size: info.size, files: info.files.length };
+  }
   if (path.startsWith('torbox/')) {
     const client = createTorboxClient(process.env.TORBOX_API_KEY);
     if (path === 'torbox/list') {
@@ -35,6 +40,7 @@ async function execute() {
         files: (entry.files || []).map((file) => ({ id: file.id, name: file.name || file.path, size: Number(file.size) || 0 })) })) };
     }
     if (path === 'torbox/download') return { url: await client.download(params.kind || 'torrents', params.id, params.fileId) };
+    if (path === 'torbox/add-anna') return submitAnnaTorrent(client, params.torrentPath, params.expectedHash);
     throw new Error('Unsupported TorBox operation.');
   }
   if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases))$/.test(path)) {

@@ -83,6 +83,18 @@ test('Anna metadata persists across restarts', (t) => {
   assert.equal(store.search('monopoly').total, 1);
 });
 
+test('Import progress safety stops preserve committed batches and the original error', async (t) => {
+  const store = openAnnaStore(); t.after(() => store.close());
+  await assert.rejects(importAnna([Buffer.from(JSON.stringify(first))], store, {
+    batchSize: 1, onProgress: () => { throw new Error('Disk reserve reached'); },
+  }), /Disk reserve reached \(1 records committed/);
+  assert.equal(store.total(), 1);
+  await assert.rejects(importAnna([Buffer.from(JSON.stringify(second))], store, {
+    onProgress: () => { throw new Error('Disk reserve reached'); },
+  }), /Disk reserve reached \(1 records committed/);
+  assert.equal(store.total(), 2);
+});
+
 test('MangaDex maps localized series, credited chapters and image pages', () => {
   const manga = mangadex.mapManga({ id: mangaId, attributes: { title: { ja: '日本語' }, originalLanguage: 'ja',
     availableTranslatedLanguages: ['en', 'fr'] }, relationships: [

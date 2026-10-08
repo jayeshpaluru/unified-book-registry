@@ -30,11 +30,21 @@ The GitHub token stays only in memory and is forgotten when the tab reloads. Eac
 
 Expect workflow startup time, usually 20–60 seconds; this is a batch-job runtime, not a low-latency API. Expired file links must be regenerated. Browser imports are capped at 200 MB in the TorBox UI; larger files should be downloaded and imported manually. File-server browser restrictions may also require manual import. CBR/RAR must be converted to CBZ. TorBox cache retention is not permanent storage; use AirLock where available and retain independent backups.
 
+### Download controls and PWA icon
+
+Local library files can be downloaded unchanged from their item menu. MangaDex-hosted chapters can be saved as ordered CBZ archives with source/group credits; external chapters keep their source-reader links. Public, unrestricted Internet Archive PDF, EPUB and CBZ files are offered where available. Publisher catalogs are not treated as universally free downloads.
+
+TorBox files offer a fresh direct link and a bounded browser download. Anna records retain safe torrent mappings when present in the imported metadata. Inspect a mapped torrent before explicitly submitting it to TorBox: **the whole torrent is queued, not just one book**. Packs may contain many files, account limits still apply, and nested archives require manual extraction. Matching existing TorBox files uses a record hash or mapped file path, not guessed titles. Records without torrent mappings still link to their Anna source page. Metadata never guarantees an available book download or bypasses protected endpoints.
+
+The generated black-and-white open-book icon is used for the favicon, Apple touch icon and installable PWA, including an opaque maskable version. The original master and exact built-in image-generation prompt are preserved in [icons/registry-master-v2.png](icons/registry-master-v2.png) and [tools/icon-spec.json](tools/icon-spec.json). Tests verify dimensions and mask-safe padding.
+
 ### Anna’s Archive status
 
 The Anna catalog is **not populated with the complete shadow-library database**. The verified TorBox connection contained no combined aarecord metadata files. The full official derived metadata torrent is much larger than a Pages site; Pages can publish at most 1 GB. A complete mirrored search index needs separate storage, rather than hiding a partial mirror behind a claim of full coverage.
 
 The static app supports streaming **local browser imports** of combined aarecord/Elasticsearch JSON, JSONL/NDJSON and gzip. Metadata stays on that device. Official line-delimited `aarecords__N.json.gz` files are recognized despite their `.json` extension. Zstandard and raw SQL/AAC conversion require the local CLI. No Anna search page crawling, protected download endpoints or book-file mirroring is performed.
+
+The explicitly started local acquisition below imports the complete selected combined-record snapshot into SQLite as each shard finishes. This is separate from the hosted Pages catalog: neither the 167 GB source files nor the complete SQLite index is published by the Pages build. A full hosted search index still needs separately provisioned storage and a search path; the current Pages snapshot must not be described as the full shadow library.
 
 ## Run locally
 
@@ -52,6 +62,21 @@ If you serve the app separately, set **Settings → Catalog service URL** to the
 ## Import Anna’s Archive metadata
 
 The full Anna’s Archive database and book files are **not bundled or automatically downloaded**. See the [official datasets page](https://annas-archive.pk/datasets) for metadata sources. The [official FAQ](https://annas-archive.pk/faq) describes local metadata databases for custom search; this app does not depend on a scraping endpoint or private download API.
+
+### Acquire the 167 GB combined-record snapshot locally
+
+Requires `aria2c` (Homebrew path `/opt/homebrew/bin/aria2c`, or set `UBR_ARIA2_PATH`). Inspect the pinned plan first, then explicitly start acquisition:
+
+```sh
+npm run acquire:anna -- --plan
+npm run acquire:anna
+```
+
+This selects only the 12 `aarecords__N.json.gz` shards from the official **20260208** derived metadata torrent: **166,956,687,557 bytes** compressed. The other files in the roughly 1.52 TB bundle are not selected, and no book payloads are acquired. The script verifies the pinned size, safe paths and enough free disk for the compressed data plus a 100 GiB reserve. BitTorrent necessarily communicates with peers; upload is limited to 256 KiB/s.
+
+Downloads and local progress live under `data/anna-metadata/20260208/`; completed shards stream directly into `data/anna.sqlite` without writing decompressed copies. The downloader uses a loopback-only RPC endpoint with an ephemeral credential. A process-checked lock prevents duplicate acquisition. Stop with Ctrl-C and rerun the same command to resume existing pieces and completed-shard checkpoints. Committed import batches survive interruption; an unfinished shard can be reimported safely. A safety stop occurs before consuming the last 100 GiB of disk. Keep the source files and SQLite database out of Git and retain independent backups.
+
+### Import an existing dump
 
 Use **Settings → Import Anna’s Archive metadata**, or the streaming command-line importer:
 
@@ -94,6 +119,6 @@ npm run build
 npm run test:site
 ```
 
-The browser tests use Chromium (or `UBR_BROWSER_PATH`) and isolated profiles. `test:browser` covers the companion mode and reader. `test:site` tests the real static artifact at a nested Pages path, metadata imports, library migration, credential-safe backups, public provider tabs and mocked encrypted TorBox jobs. Set `UBR_SITE_URL` to test the actual deployed site. None of these tests changes your personal library or catalog.
+The browser tests use Chromium (or `UBR_BROWSER_PATH`) and isolated profiles. `test:browser` covers the companion mode and reader. `test:site` tests the real static artifact at a nested Pages path, metadata imports, library migration, credential-safe backups, public provider tabs, actual fixture file/CBZ saves, PWA icons and mocked encrypted TorBox jobs. Downloads go only into the disposable test profile; no private account operation runs. Set `UBR_SITE_URL` to test the actual deployed site. None of these tests changes your personal library or catalog.
 
 Deployment uses `.github/workflows/pages.yml`. The read-only TorBox authentication and official metadata-cache checks are separate manual workflows. The count-only authentication check looks for combined Anna metadata in torrents, Web Downloads and Usenet; inaccessible collections are reported as unchecked, not empty. `node tools/runtime-smoke.mjs` uses authenticated `gh` CLI access to verify an actual encrypted TorBox list round trip without printing private file names or links. `node tools/save-catalog-snapshot.mjs` updates the checked-in public fallback after a successful catalog build.

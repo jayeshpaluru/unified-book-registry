@@ -7,6 +7,7 @@
     "start": "node server/catalog.mjs",
     "catalog": "node server/catalog.mjs",
     "import:anna": "node server/import-anna.mjs",
+    "acquire:anna": "node tools/acquire-anna.mjs",
     "sync:catalog": "node tools/sync-catalog.mjs",
     "build": "node tools/build-site.mjs",
     "test": "node --test tests/*.test.mjs",

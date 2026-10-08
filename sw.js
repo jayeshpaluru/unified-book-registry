@@ -8,7 +8,7 @@ const MAX_COVERS = 300;
 
 const SHELL_FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/app.js', 'js/db.js', 'js/util.js', 'js/pages.js', 'js/zip.js', 'js/spread.js', 'js/lib.js', 'js/items.js', 'js/importers.js',
+  'js/app.js', 'js/db.js', 'js/util.js', 'js/pages.js', 'js/zip.js', 'js/spread.js', 'js/lib.js', 'js/items.js', 'js/importers.js', 'js/downloads.js',
   'js/sources/archive.js', 'js/sources/gutendex.js', 'js/sources/opds.js',
   'js/sources/catalog-api.js', 'js/sources/anna.js', 'js/sources/mangadex.js', 'js/sources/mangaupdates.js',
   'js/sources/static-catalog.js', 'js/sources/catalog-search.js', 'js/sources/browser-metadata.js', 'js/sources/github-jobs.js', 'js/sources/publishers.js',
@@ -16,9 +16,10 @@ const SHELL_FILES = [
   'js/ui/dom.js', 'js/ui/grid.js', 'js/ui/item-menu.js', 'js/ui/browse.js', 'js/ui/library.js', 'js/ui/tabs.js',
   'js/ui/settings.js', 'js/ui/opds-view.js', 'js/ui/reader-view.js',
   'js/ui/catalog-view.js', 'js/ui/catalog-settings.js',
-  'js/ui/torbox-view.js',
+  'js/ui/torbox-view.js', 'js/ui/links.js', 'js/ui/anna-downloads.js', 'js/sources/anna-downloads.js',
   'vendor/fflate.js', 'vendor/jszip.min.js', 'vendor/epub.min.js', 'vendor/pdf.min.js', 'vendor/pdf.worker.min.js',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
+  'icons/registry-icon-192-v2.png', 'icons/registry-icon-512-v2.png', 'icons/registry-maskable-512-v2.png',
+  'icons/registry-apple-touch-v2.png', 'icons/registry-favicon-32-v2.png',
 ];
 
 const isCover = (url) =>

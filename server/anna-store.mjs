@@ -18,6 +18,7 @@ export function openAnnaStore(filename = ':memory:') {
     CREATE INDEX IF NOT EXISTS books_title ON books(title, id);
     CREATE TABLE IF NOT EXISTS catalog_counts (key INTEGER PRIMARY KEY, total INTEGER NOT NULL);
     INSERT OR IGNORE INTO catalog_counts VALUES (1, 0);
+    CREATE TABLE IF NOT EXISTS metadata_imports (key TEXT PRIMARY KEY, records INTEGER NOT NULL, completed_at TEXT NOT NULL);
     CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5(title, author, isbn, content='books', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2');
     CREATE TRIGGER IF NOT EXISTS books_insert AFTER INSERT ON books BEGIN
       INSERT INTO books_fts(rowid, title, author, isbn) VALUES (new.rowid, new.title, new.author, new.isbn);
@@ -40,6 +41,8 @@ export function openAnnaStore(filename = ':memory:') {
     put(record) { upsert.run(record.id, record.title, record.author, record.isbn.join(' '), JSON.stringify(record), record.type || 'book'); },
     begin() { db.exec('BEGIN'); }, commit() { db.exec('COMMIT'); }, rollback() { db.exec('ROLLBACK'); },
     total() { return count.get().total; }, close() { db.close(); },
+    completedImport(key) { return !!db.prepare('SELECT 1 FROM metadata_imports WHERE key = ?').get(key); },
+    finishImport(key, records) { db.prepare('INSERT OR REPLACE INTO metadata_imports VALUES (?, ?, ?)').run(key, records, new Date().toISOString()); },
     search(query = '', { offset = 0, limit = 30, type } = {}) {
       const expression = searchExpression(query);
       if (query.trim() && !expression) return { items: [], total: 0, next: null };

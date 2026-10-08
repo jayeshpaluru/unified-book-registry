@@ -9,13 +9,10 @@ import * as mangaupdates from '../sources/mangaupdates.js';
 import * as publishers from '../sources/publishers.js';
 import { catalogMode, catalogRequest } from '../sources/catalog-api.js';
 import { hasGithubSession } from '../sources/github-jobs.js';
-
-export function sourceLink(label, href, className = 'btn') {
-  try {
-    if (!['http:', 'https:'].includes(new URL(href).protocol)) return null;
-  } catch { return null; }
-  return h('a', { class: className, href, target: '_blank', rel: 'noopener noreferrer' }, label);
-}
+import { sourceLink } from './links.js';
+import { chapterCbz, safeFilename, saveBlob } from '../downloads.js';
+import { annaDownloadOptions } from './anna-downloads.js';
+export { sourceLink } from './links.js';
 
 export function mountSourceTabs(view, sources, initial, preferenceKey) {
   let teardown, generation = 0;
@@ -104,11 +101,26 @@ function mangaDexChapters(entry, host) {
             location.hash = `#/read/${encodeURIComponent(item.id)}`;
           } catch (error) { toast(error.message); }
         } }, 'Read here');
+        const downloadStatus = h('p', { class: 'muted', role: 'status' });
+        let controller;
+        const cancel = h('button', { class: 'btn', hidden: true, onClick: () => controller?.abort() }, 'Cancel download');
+        const download = h('button', { class: 'btn', onClick: async () => {
+          download.disabled = true; cancel.hidden = false; controller = new AbortController();
+          downloadStatus.textContent = 'Loading chapter pages…';
+          try {
+            const blob = await chapterCbz(await mangadex.loadPages(chapter.id), { title: `${entry.title} · ${chapterLabel(chapter)}`,
+              credits: `MangaDex; scanlation: ${chapter.groups.map((group) => group.name).join(', ')}`, signal: controller.signal,
+              onProgress: ({ pages, totalPages }) => { downloadStatus.textContent = `Downloading page ${pages}/${totalPages}…`; } });
+            saveBlob(blob, safeFilename(`${entry.title} ${chapterLabel(chapter)}`, 'cbz')); downloadStatus.textContent = 'CBZ download started.';
+          } catch (error) { downloadStatus.textContent = controller.signal.aborted ? 'Download cancelled.' : error instanceof TypeError
+            ? 'The image server blocked browser download. Use the provider reader instead.' : error.message; }
+          finally { download.disabled = false; cancel.hidden = true; }
+        } }, 'Download CBZ');
         list.append(h('li', {},
           h('strong', {}, chapterLabel(chapter)), chapter.title && h('p', {}, chapter.title),
           h('p', { class: 'muted' }, 'Scanlation: ', groupLinks(chapter.groups)),
           h('div', { class: 'import' }, chapter.externalUrl ? sourceLink('Open chapter ↗', chapter.externalUrl) : read,
-            sourceLink('MangaDex ↗', chapter.readUrl))));
+            !chapter.externalUrl && download, cancel, sourceLink('MangaDex ↗', chapter.readUrl)), downloadStatus));
       }
       cursor = page.next;
       status.textContent = list.children.length ? '' : 'No available chapters in this language.';
@@ -149,6 +161,7 @@ function mangaUpdatesReleases(entry, host) {
 
 export function catalogBody(entry) {
   const body = catalogDetails(entry);
+  if (entry.source === 'anna') body.append(annaDownloadOptions(entry));
   if (entry.source === 'mangadex') mangaDexChapters(entry, body);
   if (entry.source === 'mangaupdates') mangaUpdatesReleases(entry, body);
   return body;

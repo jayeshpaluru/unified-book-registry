@@ -65,3 +65,14 @@ export async function loadPages(id) {
   if (!result.pages.length) throw new Error('This item has no readable pages.');
   return result;
 }
+
+export function mapDownloads(id, metadata) {
+  if (metadata.is_dark || String(metadata.metadata?.['access-restricted-item']).toLowerCase() === 'true') return [];
+  return (metadata.files || []).filter((file) => ![true, 'true', 1, '1'].includes(file.private)
+    && /\.(pdf|epub|cbz)$/i.test(file.name || '') && !file.name.split('/').some((part) => !part || part === '..' || part === '.'))
+    .map((file) => ({ name: file.name, size: Number(file.size) || 0, format: file.name.split('.').pop().toUpperCase(),
+      url: `https://archive.org/download/${encodeURIComponent(id)}/${file.name.split('/').map(encodeURIComponent).join('/')}` }));
+}
+export async function loadDownloads(id) {
+  return mapDownloads(id, await fetchJson(`https://archive.org/metadata/${encodeURIComponent(id)}`));
+}

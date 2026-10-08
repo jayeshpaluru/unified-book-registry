@@ -5,12 +5,12 @@ const KINDS = new Set(['torrents', 'webdl', 'usenet']);
 export function createTorboxClient(token, { fetchImpl = fetch } = {}) {
   if (typeof token !== 'string' || !token.trim()) throw new Error('TORBOX_API_KEY is not configured.');
   token = token.trim();
-  async function request(path, params = {}) {
+  async function request(path, params = {}, init = {}) {
     const url = new URL(path, API);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
     let response;
     try {
-      response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      response = await fetchImpl(url, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
         signal: AbortSignal.timeout(30000), redirect: 'error' });
     } catch { throw new Error('TorBox could not be reached.'); }
     // Do not echo upstream error text or URLs: requestdl carries the key in its query.
@@ -23,6 +23,15 @@ export function createTorboxClient(token, { fetchImpl = fetch } = {}) {
   return {
     account: () => request('user/me'),
     cached: (hash) => request('torrents/checkcached', { hash, format: 'object', list_files: true }),
+    async addTorrent(bytes) {
+      if (!(bytes instanceof Uint8Array) || !bytes.byteLength || bytes.byteLength > 8 * 1024 * 1024) throw new Error('Invalid torrent metadata.');
+      const body = new FormData(); body.set('file', new Blob([bytes], { type: 'application/x-bittorrent' }), 'download.torrent');
+      body.set('seed', '0'); body.set('allow_zip', 'false'); body.set('as_queued', 'true');
+      const result = await request('torrents/createtorrent', {}, { method: 'POST', body });
+      const id = result?.torrent_id ?? result?.id;
+      if (!Number.isSafeInteger(id) || id < 0) throw new Error('TorBox returned no submission ID. Check its dashboard before trying again.');
+      return id;
+    },
     async list(kind = 'torrents') {
       if (!KINDS.has(kind)) throw new Error('Invalid TorBox collection.');
       const items = [];

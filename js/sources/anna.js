@@ -1,5 +1,6 @@
 import { catalogRequest, catalogMode } from './catalog-api.js';
-export const ANNA_ORIGIN = 'https://annas-archive.pk';
+import { ANNA_SOURCE_ORIGIN, torrentReferences } from './anna-downloads.js';
+export const ANNA_ORIGIN = ANNA_SOURCE_ORIGIN;
 const strings = (value) => (Array.isArray(value) ? value : value == null ? [] : [value])
   .filter((v) => typeof v === 'string' || typeof v === 'number').map(String).filter(Boolean);
 
@@ -28,7 +29,7 @@ export function mapRecord(document) {
     extension: data.extension_best || data.extension || '', filesize: Number(data.filesize_best || data.filesize) || 0,
     contentType: data.content_type_best || '', type: /comic/i.test(data.content_type_best || '') ? 'comic' : 'book', isbn,
     readUrl: md5 ? `${ANNA_ORIGIN}/md5/${md5}` : `${ANNA_ORIGIN}/search?${new URLSearchParams({ q: isbn[0] || title })}`,
-    source: 'anna', sourceName: 'Anna’s Archive',
+    torrents: torrentReferences(raw, data), source: 'anna', sourceName: 'Anna’s Archive',
   };
 }
 export const search = (text, offset = 0, type) => catalogRequest('anna/search', { q: text, offset, type });

@@ -1,8 +1,9 @@
 import { h, sheet, toast } from './dom.js';
 import { card } from './grid.js';
-import { sourceLink } from './catalog-view.js';
+import { sourceLink } from './links.js';
 import { githubJob, hasGithubSession } from '../sources/github-jobs.js';
 import { importFiles } from '../importers.js';
+import { readDownloadBytes, safeFilename, saveBlob } from '../downloads.js';
 
 export function mountTorboxBrowse(view, type) {
   let disposed = false, downloads = [];
@@ -48,13 +49,21 @@ export function mountTorboxBrowse(view, type) {
       try {
         const { url } = await githubJob('torbox/download', { kind: file.kind, id: file.downloadId, fileId: file.id },
           { onProgress: (text) => { state.textContent = text; } });
-        actions.replaceChildren(sourceLink('Open fresh download ↗', url));
+        const filename = safeFilename(file.downloadFilename || file.name.split('/').pop());
+        const save = h('button', { class: 'btn', onClick: async () => {
+          save.disabled = true; state.textContent = 'Downloading file…';
+          try {
+            const bytes = await readDownloadBytes(url, { onProgress: (size) => { state.textContent = `Downloading ${(size / 1024 / 1024).toFixed(1)} MB…`; } });
+            saveBlob(new Blob([bytes]), filename); state.textContent = 'File download started. The link was not saved.';
+          } catch (error) { state.textContent = error instanceof TypeError ? 'Browser download was blocked. Use Open fresh download, then save the file.' : error.message; }
+          finally { save.disabled = false; }
+        } }, 'Download file');
+        actions.replaceChildren(sourceLink('Open fresh download ↗', url, 'btn', filename), file.size <= 200 * 1024 * 1024 && save);
         if (!read) { state.textContent = 'This temporary link stays only in this browser session.'; return; }
         if (file.size > 200 * 1024 * 1024) throw new Error('For files over 200 MB, download and import manually to avoid exhausting browser memory.');
         state.textContent = 'Importing the file into your local browser library…';
-        const response = await fetch(url, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(120000) });
-        if (!response.ok) throw new Error('The download is unavailable. Generate a fresh link and try again.');
-        const result = await importFiles([new File([await response.blob()], file.name.split('/').pop())], type);
+        const bytes = await readDownloadBytes(url);
+        const result = await importFiles([new File([bytes], filename)], type);
         if (result.errors.length) throw new Error(result.errors.join(' '));
         close(); location.hash = `#/read/${encodeURIComponent(result.added[0].id)}`;
       } catch (error) {

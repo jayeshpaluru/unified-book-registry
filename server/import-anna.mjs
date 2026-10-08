@@ -35,20 +35,20 @@ export async function importAnna(stream, store, { filename = 'metadata.jsonl', b
   if (/\.gz$/i.test(filename)) input = input.compose(createGunzip());
   if (/\.zst$/i.test(filename)) input = input.compose(createZstdDecompress());
   const name = filename.replace(/\.(gz|zst)$/i, '');
-  let imported = 0, skipped = 0, committed = 0, lineNumber = 0, pending = 0;
-  store.begin();
+  let imported = 0, skipped = 0, committed = 0, lineNumber = 0, pending = 0, transaction = false;
   const put = (json) => {
     if (json && ['index', 'create', 'update', 'delete'].some((key) => Object.hasOwn(json, key)) && !json.file_unified_data && !json._source) return;
     const record = mapRecord(json);
     if (!record) { skipped++; return; }
     store.put(record); imported++;
     if (++pending >= batchSize) {
-      store.commit(); committed = imported; pending = 0;
+      store.commit(); transaction = false; committed = imported; pending = 0;
+      store.begin(); transaction = true;
       onProgress({ imported, skipped, total: store.total() });
-      store.begin();
     }
   };
   try {
+    store.begin(); transaction = true;
     if (/\.json$/i.test(name) && !/(?:^|[/\\])aarecords(?:__\d+)?\.json$/i.test(name)) {
       const decoder = new StringDecoder('utf8');
       let raw = '', bytes = 0;
@@ -67,12 +67,12 @@ export async function importAnna(stream, store, { filename = 'metadata.jsonl', b
       }
     }
     if (!imported && skipped) throw new Error('No combined Anna’s Archive records found. Use an aarecord/Elasticsearch export; raw collection AAC and SQL dumps need conversion first.');
-    store.commit();
+    store.commit(); transaction = false; committed = imported;
     const result = { imported, skipped, total: store.total() };
     onProgress(result);
     return result;
   } catch (error) {
-    store.rollback();
+    if (transaction) store.rollback();
     throw new Error(`Import failed${lineNumber ? ` at line ${lineNumber}` : ''}: ${error.message} (${committed} records committed before this batch.)`, { cause: error });
   } finally { input.destroy(); }
 }
