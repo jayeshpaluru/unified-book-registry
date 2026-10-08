@@ -10,6 +10,8 @@ A personal library and reader for books, comics and manga, with multiple catalog
 
 Catalog entries can be saved alongside imported files in your Library. Each section remembers your selected catalog. MangaPill, Weeb Central and MangaDex chapter manifests connect to the native reader. MangaUpdates tracks releases and credited groups, not chapter files. Comikey and WEBTOON remain metadata-only publisher directories. Batcave's unavailable catalog has been replaced by GetComics' public archive feed. No source cards, credits, chapter controls or download controls navigate to an external reader; unavailable files show an in-app error instead.
 
+Deployment checks on 2026-10-08 found restrictions that fixture tests cannot prove away: Weeb Central and GetComics reject GitHub-runner metadata requests with HTTP 403, and sampled MangaPill/Weeb Central images did not render from the Pages origin. Their cached directories remain available with a stale/error notice, but these reading/download paths are not end-to-end verified. GetComics can use its direct public browser feed where CORS is allowed; its Actions torrent/file resolver may fail before contacting TorBox. No referrer spoofing, anti-bot bypass or image relay is used to conceal those limits.
+
 ## Hosted static app
 
 Site: <https://jayeshpaluru.github.io/unified-book-registry/>

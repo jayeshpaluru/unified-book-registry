@@ -36,3 +36,20 @@ test('A large Anna store is never materialized into a Pages JSON catalog', async
   assert.equal(result.providers.anna.status, 'unavailable'); assert.equal(result.providers.anna.records, 0);
   assert.deepEqual(result.providers.anna.files, []); assert.match(result.providers.anna.error, /must not be published/);
 });
+test('An older deployed manifest cannot erase newly checked-in providers when GitHub runners are blocked', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'ubr-catalog-fallback-test-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const oldEnvironment = process.env.GITHUB_ACTIONS; process.env.GITHUB_ACTIONS = 'true';
+  t.after(() => { if (oldEnvironment === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = oldEnvironment; });
+  const local = JSON.parse(readFileSync('catalog/manifest.json', 'utf8'));
+  const result = await syncCatalog({ output: dir, pages: 1, details: false, annaDb: ':memory:', fetchImpl: async (value) => {
+    const url = new URL(value);
+    if (url.hostname === 'jayeshpaluru.github.io') return Response.json({ version: 1, providers: {}, details: {}, updatedAt: '2000-01-01T00:00:00.000Z' });
+    if (['weebcentral.com', 'getcomics.org'].includes(url.hostname)) return new Response('', { status: 403 });
+    return fetchImpl(value);
+  } });
+  for (const provider of ['weebcentral', 'getcomics']) {
+    assert.equal(result.providers[provider].status, 'stale'); assert.equal(result.providers[provider].records, local.providers[provider].records);
+    assert.match(result.providers[provider].error, /403/);
+    assert.equal(JSON.parse(readFileSync(join(dir, result.providers[provider].files[0]))).length, local.providers[provider].records);
+  }
+});

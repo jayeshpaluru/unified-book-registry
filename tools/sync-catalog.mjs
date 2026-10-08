@@ -13,11 +13,11 @@ const jsonFile = async (path, value) => { await mkdir(resolve(path, '..'), { rec
 export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl = fetch, pages = 5, details = true,
   annaDb = process.env.UBR_ANNA_DB || ':memory:' } = {}) {
   await mkdir(output, { recursive: true });
-  let previous, previousSource = 'local';
+  let previous, localPrevious, previousSource = 'local';
   const repository = process.env.GITHUB_REPOSITORY || 'jayeshpaluru/unified-book-registry';
   const [owner, name] = repository.split('/');
   const published = `https://${owner}.github.io/${name}/catalog/`;
-  try { previous = JSON.parse(await readFile(resolve('catalog/manifest.json'), 'utf8')); } catch {}
+  try { previous = localPrevious = JSON.parse(await readFile(resolve('catalog/manifest.json'), 'utf8')); } catch {}
   if (process.env.GITHUB_ACTIONS) {
     try {
       const response = await fetchImpl(`${published}manifest.json`, { signal: AbortSignal.timeout(15000) });
@@ -30,37 +30,45 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
   // Large indexes belong in separately connected storage, not a JSON snapshot.
   const store = openAnnaStore(annaDb);
   const api = createCatalogApi(store, { fetchImpl });
-  async function previousFile(path) {
+  function priorProvider(name) {
+    // A newly added provider may not exist in the older deployed manifest.
+    // Choose its freshest nonempty snapshot, keeping the corresponding origin.
+    const choices = [{ manifest: previous, source: previousSource }, { manifest: localPrevious, source: 'local' }]
+      .filter((choice) => choice.manifest?.providers?.[name]?.records)
+      .sort((a, b) => String(b.manifest.providers[name].updatedAt || '').localeCompare(String(a.manifest.providers[name].updatedAt || '')));
+    return choices.length ? { provider: choices[0].manifest.providers[name], source: choices[0].source } : null;
+  }
+  async function previousFile(path, source = previousSource) {
     if (!/^[a-zA-Z0-9_./-]+$/.test(path) || path.split('/').includes('..')) throw new Error('Invalid previous catalog path.');
-    if (previousSource === 'local') return JSON.parse(await readFile(resolve('catalog', path), 'utf8'));
+    if (source === 'local') return JSON.parse(await readFile(resolve('catalog', path), 'utf8'));
     const response = await fetchImpl(`${published}${path}`, { signal: AbortSignal.timeout(20000) });
     if (!response.ok) throw new Error('Previous catalog could not be restored.');
     return response.json();
   }
   async function restore(name) {
-    const provider = previous?.providers?.[name];
-    if (!provider?.records) return null;
-    return (await Promise.all(provider.files.map(previousFile))).flat();
+    const prior = priorProvider(name);
+    if (!prior) return null;
+    return (await Promise.all(prior.provider.files.map((file) => previousFile(file, prior.source)))).flat();
   }
   async function collect(name, run, coverage) {
     try {
       let records = await run(), restored = false;
-      if (name === 'anna' && !records.length && previous?.providers?.anna?.records) { records = await restore(name); restored = true; }
+      if (name === 'anna' && !records.length && priorProvider(name)) { records = await restore(name); restored = true; }
       const files = [];
       for (let i = 0; i < records.length; i += 500) {
         const path = `records/${name}/${String(i / 500).padStart(5, '0')}.json`;
         await jsonFile(join(output, path), records.slice(i, i + 500)); files.push(path);
       }
       manifest.providers[name] = { status: records.length ? 'ready' : 'empty', records: records.length, files,
-        coverage: restored ? previous.providers[name].coverage : coverage,
-        updatedAt: restored ? previous.providers[name].updatedAt : manifest.updatedAt };
+        coverage: restored ? priorProvider(name).provider.coverage : coverage,
+        updatedAt: restored ? priorProvider(name).provider.updatedAt : manifest.updatedAt };
       console.log(`${name}: ${records.length} public catalog entries.`);
       return records;
     } catch (error) {
       const restored = await restore(name).catch(() => null);
       if (restored) {
-        const provider = previous.providers[name];
-        for (let i = 0; i < provider.files.length; i++) await jsonFile(join(output, provider.files[i]), await previousFile(provider.files[i]));
+        const { provider, source } = priorProvider(name);
+        for (let i = 0; i < provider.files.length; i++) await jsonFile(join(output, provider.files[i]), await previousFile(provider.files[i], source));
         manifest.providers[name] = { ...provider, status: 'stale', error: error.message };
         console.log(`${name}: retained ${restored.length} entries from the last successful snapshot (${error.message}).`);
         return restored;
@@ -133,8 +141,13 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
     return entries;
   }, 'Imported combined aarecord metadata only; no full mirror is bundled.');
   if (details) {
-    for (const [key, path] of Object.entries(previous?.details || {})) {
-      try { await jsonFile(join(output, path), await previousFile(path)); manifest.details[key] = path; } catch {}
+    const priorDetails = new Map();
+    for (const candidate of [{ manifest: localPrevious, source: 'local' }, { manifest: previous, source: previousSource }]
+      .sort((a, b) => String(a.manifest?.updatedAt || '').localeCompare(String(b.manifest?.updatedAt || '')))) {
+      for (const [key, path] of Object.entries(candidate.manifest?.details || {})) priorDetails.set(key, { path, source: candidate.source });
+    }
+    for (const [key, { path, source }] of priorDetails) {
+      try { await jsonFile(join(output, path), await previousFile(path, source)); manifest.details[key] = path; } catch {}
     }
     for (const [provider, entries] of [['mangadex', md], ['mangaupdates', mu]]) {
       for (const { entry } of entries.slice(0, 30)) {
@@ -150,6 +163,7 @@ export async function syncCatalog({ output = resolve('build/catalog'), fetchImpl
       }
     }
     for (const provider of ['mangapill', 'weebcentral']) {
+      if (manifest.providers[provider].status === 'stale') continue;
       for (const entry of readerEntries[provider].slice(0, 10)) {
         const path = `${provider}/series/${entry.id}/chapters`, params = new URLSearchParams({ offset: 0 });
         try {
