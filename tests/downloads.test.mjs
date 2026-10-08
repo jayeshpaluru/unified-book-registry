@@ -52,6 +52,22 @@ test('Anna metadata retains safe torrent mappings and matches files by hash or m
   assert.deepEqual(matches.map((file) => file.id), [1, 2]);
   assert.throws(() => torrentUrl('/absolute.torrent'), /Invalid/);
 });
+test('Combined dump torrent classifications are retained without guessing file paths or duplicating richer mappings', () => {
+  const entry = mapRecord({ _id: 'md5:0123456789abcdef0123456789abcdef', _source: {
+    file_unified_data: { title_best: 'Book', classifications_unified: { torrent: [
+      'external/rich.torrent', 'external/record-reference.torrent', 'external/record-reference.torrent',
+      '../unsafe.torrent', 'https://evil.example/file.torrent', 42, null,
+    ] } }, additional: { torrent_paths: [{ torrent_path: 'external/rich.torrent', collection: 'Known collection', file_level1: 'actual.pdf' }] },
+  } });
+  assert.deepEqual(entry.torrents, [
+    { path: 'external/rich.torrent', collection: 'Known collection', file: 'actual.pdf', packedFile: '' },
+    { path: 'external/record-reference.torrent', collection: '', file: '', packedFile: '' },
+  ]);
+  assert.equal(matchingTorboxFiles(entry, [{ id: 1, kind: 'torrents', ready: true, files: [{ id: 1, name: 'Book.pdf' }] }]).length, 0);
+  const indexedOnly = mapRecord({ id: 'only-indexed', title: 'Indexed only', classifications_unified: { torrent: ['external/sample.torrent'] }, torrent_paths: {} });
+  assert.equal(indexedOnly.torrents[0].path, 'external/sample.torrent');
+});
+
 test('TorBox torrent submission keeps credentials server-side and uses a bounded multipart file', async () => {
   const client = createTorboxClient('private-test-key', { fetchImpl: async (url, init) => {
     assert.equal(new URL(url).pathname, '/v1/api/torrents/createtorrent');

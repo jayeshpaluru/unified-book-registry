@@ -24,3 +24,15 @@ export function metadataPlan(info, { expectedShards = 12, maxBytes = 200_000_000
   return { snapshot: ANNA_SNAPSHOT, hash: info.hash, root: info.name, bytes, files,
     selection: files.map((file) => file.index).join(',') };
 }
+
+// Fast resume is opt-in and only for an unchanged, gracefully stopped download.
+// aria2 still hashes every incoming BitTorrent piece; this skips only another
+// full startup read of files whose verified-piece ledger has been preserved.
+export function verifyPieceResume(plan, state, controlBytes) {
+  if (state?.status !== 'paused' || state.snapshot !== plan.snapshot || state.infoHash !== plan.hash
+      || state.selectedBytes !== plan.bytes || !Number.isSafeInteger(state.pid) || state.pid < 1
+      || !Number.isSafeInteger(state.aria2Pid) || state.aria2Pid < 1
+      || !Number.isSafeInteger(controlBytes) || controlBytes < 32) {
+    throw new Error('Verified-piece resume requires the matching paused acquisition and its existing aria2 control file. Use the default integrity check if the files changed or the prior stop was not clean.');
+  }
+}

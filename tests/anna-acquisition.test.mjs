@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metadataPlan } from '../server/anna-acquisition.mjs';
+import { metadataPlan, verifyPieceResume } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 
 const info = () => ({ name: 'public-metadata', hash: 'a'.repeat(40), files: [
@@ -26,4 +26,13 @@ test('Completed shard checkpoints belong to the local SQLite catalog', () => {
   try { assert.equal(store.completedImport('snapshot:1'), false); store.finishImport('snapshot:1', 42);
     assert.equal(store.completedImport('snapshot:1'), true); assert.equal(store.completedImport('snapshot:2'), false);
   } finally { store.close(); }
+});
+
+test('Verified-piece resume requires the same gracefully paused snapshot and an existing control file', () => {
+  const plan = metadataPlan(info()), state = { status: 'paused', snapshot: plan.snapshot, infoHash: plan.hash, selectedBytes: plan.bytes, pid: 123, aria2Pid: 124 };
+  assert.doesNotThrow(() => verifyPieceResume(plan, state, 64));
+  for (const change of [{ status: 'active' }, { status: 'error' }, { snapshot: '20250101' }, { infoHash: 'b'.repeat(40) }, { selectedBytes: 1 }, { pid: 0 }, { aria2Pid: null }]) {
+    assert.throws(() => verifyPieceResume(plan, { ...state, ...change }, 64), /matching paused/);
+  }
+  assert.throws(() => verifyPieceResume(plan, state, 0), /control file/);
 });

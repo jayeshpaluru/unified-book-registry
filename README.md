@@ -96,6 +96,8 @@ This selects only the 12 `aarecords__N.json.gz` shards from the official **20260
 
 Downloads and local progress live under `data/anna-metadata/20260208/`; completed shards stream directly into `data/anna.sqlite` without writing decompressed copies. The downloader uses a loopback-only RPC endpoint with an ephemeral credential. A process-checked lock prevents duplicate acquisition. Stop with Ctrl-C and rerun the same command to resume existing pieces and completed-shard checkpoints. Committed import batches survive interruption; an unfinished shard can be reimported safely. A safety stop occurs before consuming the last 100 GiB of disk. Keep the source files and SQLite database out of Git and retain independent backups.
 
+After a graceful stop, with unchanged data files and the original `.aria2` control file, `npm run acquire:anna -- --resume-verified-pieces` skips another full startup integrity scan and resumes aria2's saved verified-piece ledger. It requires the matching paused snapshot and refuses live/duplicate processes or missing control files. Incoming torrent pieces are still hash-checked. Use the default command after a crash, external file changes or any integrity doubt.
+
 ### Import an existing dump
 
 Use **Settings → Import Anna’s Archive metadata**, or the streaming command-line importer:
@@ -116,7 +118,7 @@ Raw collection-specific AAC records, SQL dumps and Elasticsearch snapshot direct
 
 Search supports title, author and ISBN. Records marked as comics appear in Comics; other records appear in Books. Saving an Anna’s entry saves a catalog reference with an Anna’s Archive link, not the book file. To read a file here, import it through Library.
 
-Identified combined records with no title are retained: an alternate title, original filename basename or clearly marked untitled fallback is used, so their author/ISBN metadata remains searchable. The selected 20260208 dump contains download-availability flags but those flags are not torrent mappings. Only explicit safe `torrent_paths` included in an imported record enable the mapped-torrent controls; missing paths are not guessed from collection names or flags.
+Identified combined records with no title are retained: an alternate title, original filename basename or clearly marked untitled fallback is used, so their author/ISBN metadata remains searchable. The selected 20260208 dump includes exact torrent references in `file_unified_data.classifications_unified.torrent`; these enable inspection and whole-torrent submission without inventing an inner book filename. Richer `torrent_paths` mappings are preferred when present. Download-availability flags alone are not mappings; paths are not guessed from collection names or flags. Torrent-only references require manual file selection or archive extraction after the whole pack is retrieved.
 
 The Anna’s SQLite catalog is separate from the browser’s library. Library metadata backups include saved catalog entries, MangaDex chapters, progress and settings, but not imported file blobs or the Anna’s SQLite database. Back up those files separately.
 

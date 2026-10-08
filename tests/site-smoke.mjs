@@ -149,14 +149,16 @@ try {
   assert.deepEqual(Buffer.from(cbz['0001.png']), imageBytes);
   assert.match(strFromU8(cbz['ComicInfo.xml']), /Fixture scans/);
   await evaluate(`document.querySelectorAll('.sheet-backdrop').forEach(el => el.remove());
-    import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'md5:'+ 'b'.repeat(32),
-      title:'Anna download fixture',titleIsFallback:true,source:'anna',sourceName:'Anna’s Archive',extension:'pdf',
-      torrents:[{path:'fixture/library.torrent',collection:'Fixture collection',file:'fixture.pdf'}]}))`);
+    Promise.all([import('${base}js/ui/catalog-view.js'),import('${base}js/sources/anna.js')]).then(([ui,anna]) =>
+      ui.openCatalogEntry(anna.mapRecord({_id:'md5:'+ 'b'.repeat(32),_source:{file_unified_data:{
+        title_best:'',original_filename_best:'Anna download fixture',extension_best:'pdf',
+        classifications_unified:{torrent:['fixture/library.torrent']}}}})))`);
   assert.equal(await evaluate(`document.querySelector('a[href="https://annas-archive.pk/dyn/small_file/torrents/fixture/library.torrent"]')?.textContent`), 'Download torrent ↗');
   assert.match(await evaluate('document.querySelector(".sheet").textContent'), /No catalog title was supplied/);
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Inspect torrent").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("Download with TorBox (0.05 GB)")');
   assert.match(await evaluate('document.querySelector(".sheet").textContent'), /Whole torrent/);
+  assert.match(await evaluate('document.querySelector(".sheet").textContent'), /not the exact book file/);
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Download with TorBox (0.05 GB)").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("Submitted to TorBox")');
   assert.equal(dispatches, 6, 'All private operations were intercepted fixtures, not real Actions jobs.');

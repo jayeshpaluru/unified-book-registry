@@ -10,14 +10,24 @@ export function torrentUrl(path) {
 }
 export function torrentReferences(raw, data) {
   const values = raw.additional?.torrent_paths || raw.torrent_paths || data.torrent_paths || [];
-  if (!Array.isArray(values)) return [];
-  return values.flatMap((value) => {
+  const mapped = (Array.isArray(values) ? values : []).flatMap((value) => {
     const path = typeof value === 'string' ? value : value?.torrent_path;
     if (!safeTorrentPath(path)) return [];
     return [{ path, collection: typeof value?.collection === 'string' ? value.collection : '',
       file: typeof value?.file_level1 === 'string' ? value.file_level1 : '',
       packedFile: typeof value?.file_level2 === 'string' ? value.file_level2 : '' }];
   });
+  // The combined 20260208 dump also indexes exact torrent references here.
+  // These identify a torrent, not the book's file path inside it. Prefer any
+  // richer explicit mapping, and never infer an inner path from a filename.
+  const indexed = data.classifications_unified?.torrent;
+  const known = new Set(mapped.map((torrent) => torrent.path));
+  for (const path of Array.isArray(indexed) ? indexed : []) {
+    if (safeTorrentPath(path) && !known.has(path)) {
+      mapped.push({ path, collection: '', file: '', packedFile: '' }); known.add(path);
+    }
+  }
+  return mapped;
 }
 export function matchingTorboxFiles(entry, downloads) {
   const md5 = /^md5:([a-f\d]{32})$/i.exec(entry.id || '')?.[1].toLowerCase();

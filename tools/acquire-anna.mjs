@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, writeFile, open, unlink, statfs } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, open, unlink, statfs, lstat } from 'node:fs/promises';
 import { statfsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { torrentInfo } from '../server/torrent-metadata.mjs';
-import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan } from '../server/anna-acquisition.mjs';
+import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 import { importAnna } from '../server/import-anna.mjs';
 
@@ -29,7 +29,9 @@ function ensureDisk() {
 }
 
 async function run() {
-  if (process.argv.slice(2).some((arg) => arg !== '--plan')) throw new Error('Usage: npm run acquire:anna -- [--plan]');
+  const args = process.argv.slice(2);
+  if (args.some((arg) => !['--plan', '--resume-verified-pieces'].includes(arg))
+      || new Set(args).size !== args.length || args.length > 1) throw new Error('Usage: npm run acquire:anna -- [--plan | --resume-verified-pieces]');
   await mkdir(directory, { recursive: true });
   const response = await fetch(ANNA_METADATA_TORRENT, { signal: AbortSignal.timeout(30000), redirect: 'error' });
   if (!response.ok) throw new Error(`Official metadata manifest returned HTTP ${response.status}.`);
@@ -47,6 +49,16 @@ async function run() {
   if (process.argv.includes('--plan')) return;
   const disk = await statfs(directory, { bigint: true });
   if (disk.bavail * disk.bsize < BigInt(plan.bytes) + RESERVE) throw new Error('Insufficient disk for the selected metadata plus the 100 GiB reserve.');
+  let checkIntegrity = true;
+  if (args.includes('--resume-verified-pieces')) {
+    const previous = JSON.parse(await readFile(statusFile, 'utf8'));
+    const control = await lstat(resolve(directory, `${plan.root}.aria2`));
+    if (!control.isFile()) throw new Error('The aria2 control file must be a regular file, not a link.');
+    verifyPieceResume(plan, previous, control.size);
+    if (alive(previous.pid) || alive(previous.aria2Pid)) throw new Error('The previous acquisition is still live. Do not start a duplicate.');
+    checkIntegrity = false;
+    console.log('Resuming the matching paused acquisition from its verified-piece ledger. Incoming pieces remain hash-checked.');
+  }
   let oldLock;
   try { oldLock = JSON.parse(await readFile(lockFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (oldLock) {
@@ -74,7 +86,7 @@ async function run() {
     const gid = plan.hash.slice(0, 16);
     child = spawn(process.env.UBR_ARIA2_PATH || '/opt/homebrew/bin/aria2c', [
       '--no-conf=true', `--dir=${directory}`, `--select-file=${plan.selection}`, '--file-allocation=none',
-      '--check-integrity=true', '--continue=true', '--auto-file-renaming=false', '--seed-time=0',
+      `--check-integrity=${checkIntegrity}`, '--continue=true', '--auto-file-renaming=false', '--seed-time=0',
       '--bt-enable-lpd=false', '--bt-max-peers=80', '--max-download-limit=32M', '--max-upload-limit=256K',
       '--enable-rpc=true', '--rpc-listen-all=false', `--rpc-listen-port=${port}`, `--rpc-secret=${token}`,
       `--gid=${gid}`, '--auto-save-interval=30', '--show-console-readout=false', '--summary-interval=0', '--console-log-level=warn',
@@ -127,6 +139,7 @@ async function run() {
       let status;
       try { status = await rpc('tellStatus', [gid, ['status', 'completedLength', 'downloadSpeed', 'connections', 'files', 'errorCode']]); }
       catch {
+        if (stopped) break;
         if (exitStatus !== undefined) throw new Error(`Metadata downloader exited (${exitStatus}) before verification. See data/anna-metadata/${ANNA_SNAPSHOT}/aria2.log.`);
         await sleep(3000); continue;
       }

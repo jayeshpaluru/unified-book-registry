@@ -31,7 +31,7 @@ export function annaDownloadOptions(entry) {
       inspect.disabled = true; state.textContent = 'Inspecting public torrent metadata…';
       try {
         const info = await githubJob('anna/torrent-info', { torrentPath: torrent.path });
-        state.textContent = `Whole torrent: ${(info.size / 1e9).toFixed(2)} GB across ${info.files} files. TorBox downloads the whole torrent; account limits apply.${torrent.packedFile ? ' This book is inside an archive and needs extraction after download.' : ''}`;
+        state.textContent = `Whole torrent: ${(info.size / 1e9).toFixed(2)} GB across ${info.files} files. TorBox downloads the whole torrent; account limits apply.${!torrent.file ? ' The metadata identifies this torrent but not the exact book file inside it. File selection or archive extraction must be done manually.' : torrent.packedFile ? ' This book is inside an archive and needs extraction after download.' : ''}`;
         if (info.size > 1e12) { state.append(' Too large for TorBox.'); return; }
         const submit = h('button', { class: 'btn', onClick: async () => {
           submit.disabled = true; state.textContent = 'Submitting the selected torrent to TorBox…';
