@@ -4,6 +4,7 @@ import { connectedIndex, searchIndex } from './anna-index.js';
 export const ANNA_ORIGIN = ANNA_SOURCE_ORIGIN;
 const strings = (value) => (Array.isArray(value) ? value : value == null ? [] : [value])
   .filter((v) => typeof v === 'string' || typeof v === 'number').map(String).filter(Boolean);
+const text = (value) => typeof value === 'string' ? value.trim() : '';
 
 // Combined aarecords, elasticdump documents and Elasticsearch hit objects.
 // Raw collection-specific AAC records need conversion to this combined schema.
@@ -13,8 +14,15 @@ export function mapRecord(document) {
   const data = raw.file_unified_data || raw;
   const identifiers = data.identifiers_unified || {};
   let id = raw.id || document._id || identifiers.aarecord_id?.[0] || raw.md5;
-  const title = data.title_best || data.title;
-  if (!id || typeof title !== 'string' || !title.trim()) return null;
+  const suppliedTitle = text(data.title_best) || text(data.title)
+    || (Array.isArray(data.title_additional) ? data.title_additional.map(text).find(Boolean) : '');
+  const combined = raw.file_unified_data && typeof raw.file_unified_data === 'object' && !Array.isArray(raw.file_unified_data);
+  if (!id || (!suppliedTitle && !combined)) return null;
+  // Real combined dumps contain identified, downloadable records without a
+  // catalog title. Retain them (and their searchable ISBN/author) rather than
+  // silently discarding them; never present a filename as a supplied title.
+  const filename = text(data.original_filename_best) || text(data.original_filename);
+  const title = suppliedTitle || filename.split(/[/\\]/).filter(Boolean).at(-1) || 'Untitled record';
   id = String(id);
   if (/^[a-f0-9]{32}$/i.test(id)) id = `md5:${id.toLowerCase()}`;
   const md5 = /^md5:([a-f0-9]{32})$/i.exec(id)?.[1]?.toLowerCase();
@@ -22,7 +30,7 @@ export function mapRecord(document) {
   const isbn = [...new Set([...strings(identifiers.isbn13), ...strings(identifiers.isbn10), ...strings(data.isbn)]
     .map((s) => s.replace(/[\s-]/g, '').toUpperCase()))];
   return {
-    id, title: title.trim(), author: strings(data.author_best || data.author).join(', '),
+    id, title, ...(suppliedTitle ? {} : { titleIsFallback: true }), author: strings(data.author_best || data.author).join(', '),
     cover: data.cover_url_best || data.cover || null,
     summary: typeof data.stripped_description_best === 'string' ? data.stripped_description_best : '',
     year: String(data.year_best || data.year || ''), publisher: data.publisher_best || data.publisher || '',

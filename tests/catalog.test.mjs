@@ -23,6 +23,24 @@ const second = record('md5:00000000000000000000000000000002', 'A comic collectio
 const mangaId = '0a580438-bc72-4503-940b-12a5da881b56';
 const chapterId = '93ea0d72-169d-4418-b48d-95091972a871';
 
+test('Untitled combined records retain their IDs, filenames and searchable metadata', async (t) => {
+  const store = openAnnaStore(); t.after(() => store.close());
+  const untitled = { _id: 'md5:00000000000000000000000000000004', _source: { file_unified_data: {
+    title_best: '', original_filename_best: 'C:\\collection\\Original file.pdf', author_best: 'Known author',
+    identifiers_unified: { isbn13: ['978-0-521-87928-6'] }, content_type_best: 'book_comic',
+  } } };
+  await importAnna([Buffer.from(JSON.stringify(untitled))], store);
+  const imported = store.search('9780521879286', { type: 'comic' }).items[0];
+  assert.equal(store.total(), 1); assert.equal(imported.id, untitled._id);
+  assert.equal(imported.title, 'Original file.pdf'); assert.equal(imported.titleIsFallback, true);
+  assert.equal(store.search('Known author').total, 1);
+  assert.equal(mapRecord({ id: 'missing-title', file_unified_data: {} }).title, 'Untitled record');
+  assert.equal(mapRecord({ id: 'missing-title', file_unified_data: { title_best: ' ', title_additional: ['', ' Alternate title '] } }).title, 'Alternate title');
+  assert.equal(mapRecord({ id: 'not-a-combined-record' }), null);
+  assert.equal(mapRecord({ id: 'invalid', file_unified_data: [] }), null);
+  assert.equal(mapRecord(first).titleIsFallback, undefined);
+});
+
 test('Anna import supports compressed, split UTF-8 JSONL and filters comics from books', async (t) => {
   for (const [filename, compress] of [['metadata.jsonl', (b) => b], ['metadata.jsonl.gz', gzipSync], ['metadata.jsonl.zst', zstdCompressSync], ['aarecords__0.json.gz', gzipSync]]) {
     const store = openAnnaStore();

@@ -150,9 +150,10 @@ try {
   assert.match(strFromU8(cbz['ComicInfo.xml']), /Fixture scans/);
   await evaluate(`document.querySelectorAll('.sheet-backdrop').forEach(el => el.remove());
     import('${base}js/ui/catalog-view.js').then(ui => ui.openCatalogEntry({id:'md5:'+ 'b'.repeat(32),
-      title:'Anna download fixture',source:'anna',sourceName:'Anna’s Archive',extension:'pdf',
+      title:'Anna download fixture',titleIsFallback:true,source:'anna',sourceName:'Anna’s Archive',extension:'pdf',
       torrents:[{path:'fixture/library.torrent',collection:'Fixture collection',file:'fixture.pdf'}]}))`);
   assert.equal(await evaluate(`document.querySelector('a[href="https://annas-archive.pk/dyn/small_file/torrents/fixture/library.torrent"]')?.textContent`), 'Download torrent ↗');
+  assert.match(await evaluate('document.querySelector(".sheet").textContent'), /No catalog title was supplied/);
   await evaluate('[...document.querySelectorAll(".sheet button")].find(b => b.textContent === "Inspect torrent").click()');
   await waitFor('document.querySelector(".sheet")?.textContent.includes("Download with TorBox (0.05 GB)")');
   assert.match(await evaluate('document.querySelector(".sheet").textContent'), /Whole torrent/);

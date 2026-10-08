@@ -66,6 +66,7 @@ function catalogDetails(entry) {
   } }, 'Save to library');
   return h('div', { class: 'menu' },
     h('p', { class: 'muted' }, entry.sourceName), metadata && h('p', {}, metadata),
+    entry.titleIsFallback && h('p', { class: 'muted' }, 'No catalog title was supplied. The filename or an untitled label is shown instead.'),
     entry.summary && h('p', { class: 'catalog-summary' }, entry.summary.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')),
     entry.isbn?.length && h('p', { class: 'muted' }, `ISBN: ${entry.isbn.join(', ')}`),
     sourceLink(`Open on ${entry.sourceName} ↗`, entry.readUrl), saveButton,
