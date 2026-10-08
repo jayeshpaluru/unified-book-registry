@@ -63,6 +63,10 @@ try {
   await command('Page.navigate', { url: base });
   await waitFor('!!document.querySelector("#view h1")');
   assert.equal(await evaluate(`import('${base}js/db.js').then(async db => (await db.getItem('migration-test')).progress.pct)`), 42);
+  assert.equal(await evaluate(`import('${base}js/reader/book-reader.js').then(reader => {
+    const holder=document.createElement('div');holder.append(reader.textToNodes('<math href="javascript:alert(1)"><mi>x</mi></math><a href="#local">safe</a><a href="https://example.com">external</a><template><script>alert(1)</script></template>', 'html'));
+    return !holder.querySelector('script,template') && holder.querySelectorAll('[href]').length===1 && holder.querySelector('[href]').getAttribute('href')==='#local';
+  })`), true);
   if (server) await evaluate(`import('${base}js/db.js').then(db => db.setSetting('catalogMode', 'static'))`);
   else assert.equal(await evaluate(`import('${base}js/sources/catalog-api.js').then(api => api.catalogMode())`), 'static');
   await evaluate('location.hash = "#/manga"');

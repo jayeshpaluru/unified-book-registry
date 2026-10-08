@@ -11,7 +11,7 @@ const FONTS = {
 export const DEFAULT_PREFS = { font: 'serif', size: 19, lineHeight: 1.6, margin: 24 };
 const SWIPE_PX = 50;
 
-const FORBIDDEN = 'script,style,link,iframe,object,embed,img,svg,form,meta,base';
+const FORBIDDEN = 'script,style,link,iframe,object,embed,img,svg,form,meta,base,template';
 
 // Plain text becomes paragraphs; HTML is stripped of anything active or external.
 export function textToNodes(raw, format) {
@@ -21,7 +21,7 @@ export function textToNodes(raw, format) {
     doc.querySelectorAll(FORBIDDEN).forEach((n) => n.remove());
     doc.querySelectorAll('*').forEach((n) => {
       for (const a of [...n.attributes]) if (!['href', 'id'].includes(a.name)) n.removeAttribute(a.name);
-      if (n.tagName === 'A' && !n.getAttribute('href')?.startsWith('#')) n.removeAttribute('href');
+      if (n.tagName !== 'A' || !n.getAttribute('href')?.startsWith('#')) n.removeAttribute('href');
     });
     frag.append(...doc.body.childNodes);
   } else {
@@ -138,7 +138,8 @@ async function mountEpub(content, { item, blob, prefs, zone, report, setApply, s
   const book = ePub(await blob.arrayBuffer());
   const pageEl = h('div', { class: 'br-epub' });
   content.replaceChildren(h('div', { class: 'br-epub' }, pageEl));
-  const rendition = book.renderTo(pageEl, { width: '100%', height: '100%', flow: 'paginated', spread: 'none' });
+  const rendition = book.renderTo(pageEl, { width: '100%', height: '100%', flow: 'paginated', spread: 'none',
+    allowScriptedContent: false, allowPopups: false });
   let locationsReady = false;
   let swipedAt = 0;
   let shown = false;
