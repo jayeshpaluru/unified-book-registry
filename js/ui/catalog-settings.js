@@ -3,6 +3,7 @@ import * as db from '../db.js';
 import { DEFAULT_CATALOG_URL, validateCatalogUrl, catalogMode } from '../sources/catalog-api.js';
 import * as anna from '../sources/anna.js';
 import { connectGithub, forgetGithubSession, hasGithubSession, DEFAULT_REPO } from '../sources/github-jobs.js';
+import { annaIndexSettings } from './anna-index-settings.js';
 
 export async function catalogSettings() {
   const savedMode = await db.getSetting('catalogMode', 'auto');
@@ -16,12 +17,12 @@ export async function catalogSettings() {
   async function check() {
     try {
       const status = await anna.status();
-      state.textContent = `${status.static ? 'Static catalog' : 'Connected'} · ${status.annaRecords.toLocaleString()} Anna’s Archive records${status.importing ? ' · import running' : ''}.`;
+      state.textContent = `${status.remoteAnna ? 'Connected TorBox index' : status.static ? 'Static catalog' : 'Connected'} · ${status.annaRecords.toLocaleString()} Anna’s Archive records${status.importing ? ' · import running' : ''}.`;
       if (status.static) {
         state.append(h('p', {}, `Last public catalog sync: ${new Date(status.updatedAt).toLocaleString()}.`));
         for (const [name, provider] of Object.entries(status.providers)) state.append(h('p', {},
           `${name}: ${provider.records.toLocaleString()} entries · ${provider.status}. ${provider.coverage || provider.error || ''}`));
-        if (!status.annaRecords) state.append(h('p', {}, 'Anna’s Archive is not populated yet. No combined metadata dump was found in TorBox.'));
+        if (!status.annaRecords) state.append(h('p', {}, 'Anna’s Archive metadata is not populated in this Pages snapshot or browser yet. Import metadata locally or connect a finalized TorBox index.'));
       }
     } catch (error) { state.textContent = await catalogMode() === 'static' ? error.message : 'Disconnected. Start your catalog service, then save its URL here.'; }
   }
@@ -94,6 +95,7 @@ export async function catalogSettings() {
     h('button', { type: 'button', class: 'btn', onClick: () => { forgetGithubSession(); session.textContent = 'Session forgotten.'; token.value = ''; } }, 'Forget session')),
     session, h('p', { class: 'muted' }, 'Actions requests usually take 20–60 seconds to start. Private results are encrypted for this browser session before being stored in the public repo.'),
     h('a', { href: `https://github.com/${DEFAULT_REPO}/actions`, target: '_blank', rel: 'noopener noreferrer' }, 'Workflow status ↗'));
+  section.append(annaIndexSettings(check));
   check();
   return section;
 }

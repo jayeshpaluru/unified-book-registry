@@ -1,0 +1,13 @@
+{
+  "upstream": "https://github.com/rhashimoto/wa-sqlite",
+  "commit": "96d91182bf958d1c9fce2d851f66198378d8dbf1",
+  "license": "MIT",
+  "sourceFiles": "src/* and LICENSE copied unchanged from this commit",
+  "runtimeBuild": "https://github.com/jayeshpaluru/unified-book-registry/actions/runs/37781982653",
+  "compiler": "Emscripten 4.0.23",
+  "makeArguments": "dist/wa-sqlite-async.mjs WASQLITE_EXTRA_DEFINES=-DSQLITE_ENABLE_FTS5",
+  "sha256": {
+    "runtime/wa-sqlite-async.mjs": "228f44f706a10b7cb1d2e0c96c2cbadc63a357c3884bb2a359b18e6016ab37d4",
+    "runtime/wa-sqlite-async.wasm": "21a51badd0e07cc519f4271ccb88e88dd15fe592b31c7874771e5c5b2e1cb74d"
+  }
+}

@@ -1,12 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-
-export function searchExpression(query) {
-  let text = query.trim().normalize('NFKC');
-  if (/^[\dXx\s-]+$/.test(text) && [10, 13].includes(text.replace(/[\s-]/g, '').length)) text = text.replace(/[\s-]/g, '');
-  return (text.match(/[\p{L}\p{N}]+/gu) || []).slice(0, 20).map((term) => `"${term}"*`).join(' AND ');
-}
+import { searchExpression } from '../js/index/queries.js';
+export { searchExpression } from '../js/index/queries.js';
 
 export function openAnnaStore(filename = ':memory:') {
   if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });

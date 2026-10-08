@@ -1,5 +1,6 @@
 import { catalogRequest, catalogMode } from './catalog-api.js';
 import { ANNA_SOURCE_ORIGIN, torrentReferences } from './anna-downloads.js';
+import { connectedIndex, searchIndex } from './anna-index.js';
 export const ANNA_ORIGIN = ANNA_SOURCE_ORIGIN;
 const strings = (value) => (Array.isArray(value) ? value : value == null ? [] : [value])
   .filter((v) => typeof v === 'string' || typeof v === 'number').map(String).filter(Boolean);
@@ -32,8 +33,14 @@ export function mapRecord(document) {
     torrents: torrentReferences(raw, data), source: 'anna', sourceName: 'Anna’s Archive',
   };
 }
-export const search = (text, offset = 0, type) => catalogRequest('anna/search', { q: text, offset, type });
-export const status = () => catalogRequest('health');
+export const search = async (text, offset = 0, type) => await catalogMode() === 'static' && connectedIndex()
+  ? searchIndex(text, offset, type) : catalogRequest('anna/search', { q: text, offset, type });
+export const status = async () => {
+  const health = await catalogRequest('health'), index = connectedIndex();
+  if (!health.static || !index) return health;
+  return { ...health, annaRecords: index.records, remoteAnna: index, providers: { ...health.providers,
+    anna: { status: 'ready', records: index.records, files: [], coverage: `TorBox index: ${index.shards.length}/12 combined metadata shards from ${index.snapshot}; ${index.complete ? 'complete selected snapshot' : 'partial index'}.` } } };
+};
 export async function importMetadata(file) {
   if (await catalogMode() === 'static') return (await import('./browser-metadata.js')).importBrowserMetadata(file);
   return catalogRequest('anna/import', { filename: file.name }, {

@@ -20,7 +20,7 @@ if (!base) {
       if (!file.startsWith(root + sep)) throw new Error('Outside artifact');
       const bytes = await readFile(file);
       response.writeHead(200, { 'Content-Type': ({ '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
-        '.webmanifest': 'application/manifest+json', '.png': 'image/png' })[extname(file)] || 'application/octet-stream' }); response.end(bytes);
+        '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.mjs': 'text/javascript', '.wasm': 'application/wasm' })[extname(file)] || 'application/octet-stream' }); response.end(bytes);
     } catch { response.writeHead(404); response.end('Not found'); }
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');

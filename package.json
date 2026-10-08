@@ -8,10 +8,12 @@
     "catalog": "node server/catalog.mjs",
     "import:anna": "node server/import-anna.mjs",
     "acquire:anna": "node tools/acquire-anna.mjs",
+    "export:anna-index": "node tools/export-anna-index.mjs",
     "sync:catalog": "node tools/sync-catalog.mjs",
     "build": "node tools/build-site.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node tests/browser-smoke.mjs",
-    "test:site": "node tests/site-smoke.mjs"
+    "test:site": "node tests/site-smoke.mjs",
+    "test:index": "node tests/index-browser-smoke.mjs"
   }
 }

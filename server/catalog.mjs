@@ -9,7 +9,7 @@ import { searchRecords } from '../js/sources/catalog-search.js';
 
 export const APP_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const CONTENT_TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const CONTENT_TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
 function fail(message, status = 400) { throw Object.assign(new Error(message), { status }); }
 function number(params, key, fallback, min, max) {

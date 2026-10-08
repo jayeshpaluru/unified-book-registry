@@ -44,7 +44,25 @@ The Anna catalog is **not populated with the complete shadow-library database**.
 
 The static app supports streaming **local browser imports** of combined aarecord/Elasticsearch JSON, JSONL/NDJSON and gzip. Metadata stays on that device. Official line-delimited `aarecords__N.json.gz` files are recognized despite their `.json` extension. Zstandard and raw SQL/AAC conversion require the local CLI. No Anna search page crawling, protected download endpoints or book-file mirroring is performed.
 
-The explicitly started local acquisition below imports the complete selected combined-record snapshot into SQLite as each shard finishes. This is separate from the hosted Pages catalog: neither the 167 GB source files nor the complete SQLite index is published by the Pages build. A full hosted search index still needs separately provisioned storage and a search path; the current Pages snapshot must not be described as the full shadow library.
+The explicitly started local acquisition below imports the complete selected combined-record snapshot into SQLite as each shard finishes. This is separate from the hosted Pages catalog: neither the 167 GB source files nor the complete SQLite index is published by the Pages build. The browser now has a range-reading SQLite search path for a finalized index stored in TorBox. The real full index still has to finish importing, be exported, transferred to storage and verified against TorBox's browser/CORS behavior; the current Pages snapshot must not be described as the full shadow library.
+
+### Search a full metadata index without a separately hosted API
+
+Once all 12 shards have finished importing locally:
+
+```sh
+npm run export:anna-index
+```
+
+This makes a separate, consistent `data/anna-index/<snapshot>-<unique>/anna-index.sqlite` and checksum receipt. It does not upload anything or modify the live source. It refuses incomplete shard checkpoints, verifies SQLite integrity and requires enough disk for another database copy plus a 100 GiB reserve. Interrupted exports leave a partial copy, never a completed receipt. Keep the finalized index immutable. The complete selected snapshot is historical metadata, not a live view of all current Anna records or a guarantee of available book downloads.
+
+After that finalized file has been placed in your TorBox storage, connect the GitHub session and use **Settings → Full Anna metadata index (TorBox storage) → Load Anna index files from TorBox**. Select the SQLite index to connect it for this tab. Books/Comics Anna searches will then query the connected index; disconnecting returns them to the Pages snapshot and browser imports. The UI distinguishes complete selected snapshots from partial indexes.
+
+The browser queries SQLite FTS5 in an isolated worker and reads only requested HTTP byte ranges through a bounded in-memory cache. It does not download the complete database, copy it into IndexedDB, require SharedArrayBuffer/COOP/COEP, or send the TorBox API key to the browser. Temporary index links and page bytes are not persisted in backups or the service-worker cache. Reconnect after reload or file-link expiry. Each query has a 30-second/range-byte budget; broad searches may need more specific terms.
+
+**TorBox file-server compatibility has not yet been verified with a real private index.** The server must return `206`, allow browser CORS range requests, expose `Content-Range` and serve the uncompressed finalized SQLite file. Full-file `200` responses, hidden/malformed range headers, changed files and incomplete bodies are rejected. If that compatibility fails, this specific browser-only search path will not work; it is not silently replaced with a partial catalog or an unapproved API bridge. Uploading/seeding a real generated index and publishing private encrypted runtime results are separate operations, not performed by the exporter or deployment workflow.
+
+The MIT-licensed browser runtime is built from pinned [wa-sqlite](https://github.com/rhashimoto/wa-sqlite) source with FTS5 enabled; [vendor/wa-sqlite/PROVENANCE.json](vendor/wa-sqlite/PROVENANCE.json) records source/compiler pins and asset hashes. The public-source compiler workflow receives no TorBox credentials.
 
 ## Run locally
 
@@ -117,8 +135,9 @@ npm run test:browser
 npm run sync:catalog
 npm run build
 npm run test:site
+npm run test:index
 ```
 
-The browser tests use Chromium (or `UBR_BROWSER_PATH`) and isolated profiles. `test:browser` covers the companion mode and reader. `test:site` tests the real static artifact at a nested Pages path, metadata imports, library migration, credential-safe backups, public provider tabs, actual fixture file/CBZ saves, PWA icons and mocked encrypted TorBox jobs. Downloads go only into the disposable test profile; no private account operation runs. Set `UBR_SITE_URL` to test the actual deployed site. None of these tests changes your personal library or catalog.
+The browser tests use Chromium (or `UBR_BROWSER_PATH`) and isolated profiles. `test:browser` covers the companion mode and reader. `test:site` tests the real static artifact at a nested Pages path, metadata imports, library migration, credential-safe backups, public provider tabs, actual fixture file/CBZ saves, PWA icons and mocked encrypted TorBox jobs. `test:index` uses real WASM SQLite over a disposable cross-origin range server, checks title/author/ISBN and comic searches, exercises mocked TorBox index selection, measures fetched bytes and verifies CORS/whole-file rejection. Downloads go only into disposable test profiles; no private account operation runs. Set `UBR_SITE_URL` to test the actual deployed site. None of these tests changes your personal library or catalog.
 
 Deployment uses `.github/workflows/pages.yml`. The read-only TorBox authentication and official metadata-cache checks are separate manual workflows. The count-only authentication check looks for combined Anna metadata in torrents, Web Downloads and Usenet; inaccessible collections are reported as unchecked, not empty. `node tools/runtime-smoke.mjs` uses authenticated `gh` CLI access to verify an actual encrypted TorBox list round trip without printing private file names or links. `node tools/save-catalog-snapshot.mjs` updates the checked-in public fallback after a successful catalog build.

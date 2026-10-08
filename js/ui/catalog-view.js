@@ -193,7 +193,7 @@ export function mountCatalogBrowse(view, provider, { title, type } = {}) {
     try {
       const health = await anna.status();
       const source = health.providers[provider];
-      note.append(`Static catalog: ${(source?.records || 0).toLocaleString()} entries. ${source?.coverage || ''} `,
+      note.append(`${provider === 'anna' && health.remoteAnna ? 'Connected TorBox index' : 'Static catalog'}: ${(source?.records || 0).toLocaleString()} entries. ${source?.coverage || ''} `,
         h('a', { href: '#/settings' }, 'Catalog status / connection'));
       if (provider === 'anna' && !health.annaRecords) note.append(' Anna’s metadata has not been imported yet; this is not the complete shadow-library index.');
     } catch { note.append('Static catalog not yet built. ', h('a', { href: '#/settings' }, 'Settings')); }
