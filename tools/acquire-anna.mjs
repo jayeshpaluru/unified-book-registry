@@ -18,7 +18,7 @@ const statusFile = resolve(directory, 'status.json');
 const lockFile = resolve(directory, 'acquisition.lock');
 const dbPath = resolve(root, 'data/anna.sqlite');
 const RESERVE = 100n * 1024n ** 3n;
-const IMPORT_BATCH_SIZE = 10000;
+const IMPORT_BATCH_SIZE = 2000;
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 function alive(pid) {
   if (!Number.isSafeInteger(pid) || pid < 1) return false;
