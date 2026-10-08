@@ -112,7 +112,7 @@ try {
   await evaluate('[...document.querySelectorAll("button")].find(b=>b.textContent.startsWith("anna-index.sqlite ·")).click()');
   await waitFor('document.body.textContent.includes("complete selected snapshot")');
   assert.equal(dispatches, 2);
-  const query = (text, type) => evaluate(`import('${base}js/sources/anna.js').then(anna=>anna.search(${JSON.stringify(text)},0,${JSON.stringify(type)}))`);
+  const query = (text, type, offset = 0) => evaluate(`import('${base}js/sources/anna.js').then(anna=>anna.search(${JSON.stringify(text)},${offset},${JSON.stringify(type)}))`);
   assert.deepEqual((await query('Range search', 'book')).items.map(item => item.id), ['fixture-book']);
   assert.equal((await query('Example Author')).total, 2);
   assert.deepEqual((await query('978-1-234-56789-0', 'book')).items.map(item => item.id), ['fixture-book']);
@@ -122,6 +122,14 @@ try {
   assert.equal((await query('?!')).total, 0);
   assert.ok(servedBytes < bytes.length / 2, `${servedBytes} fetched out of ${bytes.length}; the full database must not be downloaded.`);
   assert.ok(rangeRequests > 0);
+  const beforeBroadQuery = servedBytes;
+  const broad = await query('Filler Author', 'book');
+  assert.equal(broad.total, 4000); assert.equal(broad.items.length, 30); assert.equal(broad.next, 30);
+  assert.ok(servedBytes - beforeBroadQuery < bytes.length / 4, 'A broad author query must count matches from the search index, not scan every full metadata record.');
+  assert.equal((await query('Filler Author')).total, 4000);
+  const latePage = await query('Filler Author', 'book', 3990);
+  assert.equal(latePage.total, 4000); assert.equal(latePage.next, null);
+  assert.deepEqual(latePage.items.map(item => item.id), Array.from({ length: 10 }, (_, n) => `filler-${3990 + n}`));
   assert.equal(await evaluate(`import('${base}js/db.js').then(async db=>!JSON.stringify(await db.exportMetadata()).includes('temporary-link'))`), true);
   await evaluate('navigator.serviceWorker.ready');
   assert.equal(await evaluate(`caches.keys().then(async names=>(await Promise.all(names.map(async name=>(await(await caches.open(name)).keys()).some(request=>request.url.includes('temporary-link'))))).some(Boolean))`), false);

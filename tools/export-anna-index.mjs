@@ -11,8 +11,9 @@ try {
   let lastLog = 0;
   const result = await exportAnnaIndex({ sourcePath: resolve(root, 'data/anna.sqlite'), plan,
     directory: resolve(root, 'data/anna-index'), onProgress: (progress) => {
-      if (progress.stage !== 'copying' || Date.now() - lastLog > 15000) {
+      if (!['copying', 'indexing'].includes(progress.stage) || Date.now() - lastLog > 15000) {
         console.log(progress.stage === 'copying' ? `Copying snapshot: ${progress.totalPages - progress.remainingPages}/${progress.totalPages} pages.`
+          : progress.stage === 'indexing' ? `Building search partitions: ${progress.indexed.toLocaleString()}/${progress.records.toLocaleString()} metadata records.`
           : `${progress.stage}: ${progress.records.toLocaleString()} metadata records.`); lastLog = Date.now();
       }
     } });

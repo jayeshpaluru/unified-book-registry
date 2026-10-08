@@ -31,7 +31,7 @@ async function connect({ url, size }) {
 }
 async function search({ query = '', offset = 0, type }) {
   if (!db || !manifest) throw new Error('Connect an index first.');
-  reader.beginQuery(); const limit = 30, sql = searchStatements(query, { offset, limit, type });
+  reader.beginQuery(); const limit = 30, sql = searchStatements(query, { offset, limit, type, searchLayout: manifest.searchLayout });
   if (sql.empty) return { items: [], total: 0, next: null, stats: reader.stats() };
   const total = sql.count ? (await rows(sql.count, sql.countArgs))[0][0] : type ? manifest.counts[type] : manifest.records;
   const items = (await rows(sql.rows, sql.rowArgs)).map(([data]) => JSON.parse(data));

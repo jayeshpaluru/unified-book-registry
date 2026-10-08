@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { torrentInfo } from '../server/torrent-metadata.mjs';
-import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume } from '../server/anna-acquisition.mjs';
+import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 import { importAnna } from '../server/import-anna.mjs';
 
@@ -56,8 +56,14 @@ async function run() {
     if (!control.isFile()) throw new Error('The aria2 control file must be a regular file, not a link.');
     verifyPieceResume(plan, previous, control.size);
     if (alive(previous.pid) || alive(previous.aria2Pid)) throw new Error('The previous acquisition is still live. Do not start a duplicate.');
+    if (previous.status === 'complete') {
+      for (const file of plan.files) {
+        const actual = await lstat(resolve(directory, plan.root, file.name));
+        if (!actual.isFile() || actual.size !== file.size) throw new Error('The legacy completed transfer no longer has all pinned shard lengths. Use the default integrity check.');
+      }
+    }
     checkIntegrity = false;
-    console.log('Resuming the matching paused acquisition from its verified-piece ledger. Incoming pieces remain hash-checked.');
+    console.log('Resuming the matching stopped acquisition from its verified-piece ledger. Incoming pieces remain hash-checked.');
   }
   let oldLock;
   try { oldLock = JSON.parse(await readFile(lockFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -109,7 +115,7 @@ async function run() {
       return json.result;
     }
     let lastLog = 0;
-    async function importReady(files) {
+    async function importReady(files, downloadComplete) {
       for (const file of plan.files) {
         const key = `${plan.hash}:${file.index}`;
         if (store.completedImport(key)) {
@@ -117,9 +123,11 @@ async function run() {
           continue;
         }
         const downloaded = files?.find((entry) => Number(entry.index) === file.index);
-        if (!downloaded || Number(downloaded.completedLength) !== file.size) continue;
+        if (!metadataFileReady(file, downloaded, downloadComplete)) continue;
         const path = resolve(directory, plan.root, file.name);
         if (resolve(downloaded.path) !== path) throw new Error('Unexpected downloaded shard path.');
+        const actual = await lstat(path);
+        if (!actual.isFile() || actual.size !== file.size) throw new Error('A completed shard is not a regular file with its pinned compressed length.');
         ensureDisk(); state.status = 'importing'; state.currentShard = file.shard; await save();
         console.log(`Importing completed metadata shard ${file.shard + 1}/${plan.files.length} into local SQLite…`);
         let lastProgress = 0;
@@ -143,10 +151,13 @@ async function run() {
         if (exitStatus !== undefined) throw new Error(`Metadata downloader exited (${exitStatus}) before verification. See data/anna-metadata/${ANNA_SNAPSHOT}/aria2.log.`);
         await sleep(3000); continue;
       }
-      state.status = status.status; state.completedBytes = Number(status.completedLength);
+      state.transferStatus = status.status;
+      state.status = status.status === 'complete' ? 'downloaded' : status.status;
+      state.verifiedPieceBytes = Number(status.completedLength);
+      state.completedBytes = Math.min(state.verifiedPieceBytes, plan.bytes);
       state.downloadBytesPerSecond = Number(status.downloadSpeed); state.connections = Number(status.connections);
       await save();
-      await importReady(status.files);
+      await importReady(status.files, status.status === 'complete');
       if (Date.now() - lastLog > 30000) {
         console.log(`Metadata: ${(state.completedBytes / 1e9).toFixed(2)}/${(plan.bytes / 1e9).toFixed(2)} GB · ${(state.downloadBytesPerSecond / 1e6).toFixed(2)} MB/s · ${state.connections} peers · ${state.importedShards.length}/12 shards imported.`);
         lastLog = Date.now();

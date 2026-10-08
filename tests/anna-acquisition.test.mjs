@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metadataPlan, verifyPieceResume } from '../server/anna-acquisition.mjs';
+import { metadataPlan, verifyPieceResume, metadataFileReady } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 
 const info = () => ({ name: 'public-metadata', hash: 'a'.repeat(40), files: [
@@ -35,4 +35,23 @@ test('Verified-piece resume requires the same gracefully paused snapshot and an 
     assert.throws(() => verifyPieceResume(plan, { ...state, ...change }, 64), /matching paused/);
   }
   assert.throws(() => verifyPieceResume(plan, state, 0), /control file/);
+  const completed = { ...state, status: 'complete', completedBytes: plan.bytes + 16, importedShards: [8] };
+  assert.doesNotThrow(() => verifyPieceResume(plan, completed, 64));
+  for (const change of [{ completedBytes: 100 }, { transferStatus: 'active' }, { importedShards: [8, 8] }, { importedShards: [12] }, { importedShards: undefined }]) {
+    assert.throws(() => verifyPieceResume(plan, { ...completed, ...change }, 64), /matching paused/);
+  }
+});
+
+test('A complete selected torrent unblocks pinned shards when per-file piece counts differ from exact file lengths', () => {
+  const file = { index: 2, size: 12345 };
+  const reported = { index: '2', selected: 'true', completedLength: '12345' };
+  assert.equal(metadataFileReady(file, reported), true);
+  for (const completedLength of ['12000', '12500']) {
+    const estimated = { ...reported, completedLength };
+    assert.equal(metadataFileReady(file, estimated), false);
+    assert.equal(metadataFileReady(file, estimated, true), true);
+  }
+  assert.equal(metadataFileReady(file, { ...reported, selected: false }, true), false);
+  assert.equal(metadataFileReady(file, { ...reported, index: '3' }, true), false);
+  assert.equal(metadataFileReady(file, undefined, true), false);
 });

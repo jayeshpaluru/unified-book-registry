@@ -25,14 +25,28 @@ export function metadataPlan(info, { expectedShards = 12, maxBytes = 200_000_000
     selection: files.map((file) => file.index).join(',') };
 }
 
-// Fast resume is opt-in and only for an unchanged, gracefully stopped download.
+// Fast resume is opt-in and only for an unchanged, gracefully stopped download
+// or the legacy completed-transfer state (which predates separate import status).
 // aria2 still hashes every incoming BitTorrent piece; this skips only another
 // full startup read of files whose verified-piece ledger has been preserved.
 export function verifyPieceResume(plan, state, controlBytes) {
-  if (state?.status !== 'paused' || state.snapshot !== plan.snapshot || state.infoHash !== plan.hash
+  const legacyDownloaded = state?.status === 'complete' && state.transferStatus === undefined
+    && Number.isSafeInteger(state.completedBytes) && state.completedBytes >= plan.bytes
+    && Array.isArray(state.importedShards) && state.importedShards.length < 12
+    && new Set(state.importedShards).size === state.importedShards.length
+    && state.importedShards.every((n) => Number.isSafeInteger(n) && n >= 0 && n < 12);
+  if (!(state?.status === 'paused' || legacyDownloaded) || state.snapshot !== plan.snapshot || state.infoHash !== plan.hash
       || state.selectedBytes !== plan.bytes || !Number.isSafeInteger(state.pid) || state.pid < 1
       || !Number.isSafeInteger(state.aria2Pid) || state.aria2Pid < 1
       || !Number.isSafeInteger(controlBytes) || controlBytes < 32) {
-    throw new Error('Verified-piece resume requires the matching paused acquisition and its existing aria2 control file. Use the default integrity check if the files changed or the prior stop was not clean.');
+    throw new Error('Verified-piece resume requires the matching paused acquisition (or legacy completed transfer) and its existing aria2 control file. Use the default integrity check if the files changed or the prior stop was not clean.');
   }
+}
+
+export function metadataFileReady(file, reported, downloadComplete = false) {
+  if (!reported || Number(reported.index) !== file.index || !['true', true].includes(reported.selected)) return false;
+  // BitTorrent file completion bytes can include/omit shared piece boundaries.
+  // A complete selected download is authoritative; do not wait forever for an
+  // estimated per-file byte count to equal the exact compressed file length.
+  return downloadComplete || Number(reported.completedLength) === file.size;
 }

@@ -36,8 +36,38 @@ export async function exportAnnaIndex({ sourcePath, plan, directory, reserveByte
       counts[row.kind] = row.records;
     }
     const records = target.prepare('SELECT total FROM catalog_counts WHERE key = 1').get().total;
+    if (!Number.isSafeInteger(records) || records < 1 || counts.book + counts.comic !== records) throw new Error('Invalid metadata record counts in the snapshot.');
+    // Build compact per-kind postings only in the immutable export. The live
+    // import schema and its original FTS row IDs are left untouched.
+    target.exec(`CREATE VIRTUAL TABLE books_search_book USING fts5(title, author, isbn, content='', tokenize='unicode61 remove_diacritics 2');
+      CREATE VIRTUAL TABLE books_search_comic USING fts5(title, author, isbn, content='', tokenize='unicode61 remove_diacritics 2');`);
+    const maximum = target.prepare('SELECT max(rowid) AS rowid FROM books'); maximum.setReadBigInts(true);
+    const last = maximum.get().rowid;
+    const firstBoundary = target.prepare('SELECT rowid FROM books ORDER BY rowid LIMIT 1 OFFSET 49999'); firstBoundary.setReadBigInts(true);
+    const nextBoundary = target.prepare('SELECT rowid FROM books WHERE rowid > ? ORDER BY rowid LIMIT 1 OFFSET 49999'); nextBoundary.setReadBigInts(true);
+    let previous = null, indexed = 0;
+    while (previous === null || previous < last) {
+      const disk = statfsSync(folder, { bigint: true });
+      if (disk.bavail * disk.bsize < reserveBytes) throw new Error('Search-index construction stopped before consuming the safety reserve. Its partial copy and source are preserved.');
+      const end = (previous === null ? firstBoundary.get() : nextBoundary.get(previous))?.rowid ?? last;
+      target.exec('BEGIN');
+      try {
+        for (const kind of ['book', 'comic']) {
+          const result = target.prepare(`INSERT INTO books_search_${kind}(rowid, title, author, isbn)
+            SELECT rowid, title, author, isbn FROM books NOT INDEXED WHERE ${previous === null ? '' : 'rowid > ? AND '}rowid <= ? AND kind = ?`)
+            .run(...(previous === null ? [] : [previous]), end, kind);
+          indexed += Number(result.changes);
+        }
+        target.exec('COMMIT');
+      } catch (error) { target.exec('ROLLBACK'); throw error; }
+      previous = end;
+      onProgress({ stage: 'indexing', indexed, records });
+    }
+    for (const kind of ['book', 'comic']) {
+      if (target.prepare(`SELECT count(*) AS records FROM books_search_${kind}`).get().records !== counts[kind]) throw new Error('Partitioned search counts do not match the metadata snapshot.');
+    }
     const manifest = indexManifest({ format: 'ubr-anna-sqlite', version: 1, payload: 'metadata-only', complete: true,
-      snapshot: plan.snapshot, infoHash: plan.hash, records, counts,
+      snapshot: plan.snapshot, infoHash: plan.hash, records, counts, searchLayout: 'partitioned-fts-v1',
       shards: plan.files.map((file) => file.shard).sort((a, b) => a - b), generatedAt: new Date().toISOString() });
     target.exec('CREATE TABLE IF NOT EXISTS anna_index_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
     target.prepare('INSERT OR REPLACE INTO anna_index_metadata VALUES (?, ?)').run('manifest', JSON.stringify(manifest));
