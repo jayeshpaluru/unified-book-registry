@@ -1,13 +1,13 @@
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportAnnaIndex } from '../server/anna-index.mjs';
-import { ANNA_SNAPSHOT } from '../server/anna-acquisition.mjs';
+import { auditAcquiredMetadata, auditProgress } from './audit-anna-metadata.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 if (process.argv.length > 2) throw new Error('Usage: npm run export:anna-index');
 try {
-  const plan = JSON.parse(await readFile(resolve(root, 'data/anna-metadata', ANNA_SNAPSHOT, 'plan.json'), 'utf8'));
+  const { plan, receipt: audit } = await auditAcquiredMetadata({ onProgress: auditProgress() });
+  if (!audit.complete) throw new Error('A complete source audit is required before exporting the full snapshot.');
   let lastLog = 0;
   const result = await exportAnnaIndex({ sourcePath: resolve(root, 'data/anna.sqlite'), plan,
     directory: resolve(root, 'data/anna-index'), onProgress: (progress) => {

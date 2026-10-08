@@ -8,6 +8,7 @@
     "catalog": "node server/catalog.mjs",
     "import:anna": "node server/import-anna.mjs",
     "acquire:anna": "node tools/acquire-anna.mjs",
+    "audit:anna": "node tools/audit-anna-metadata.mjs",
     "export:anna-index": "node tools/export-anna-index.mjs",
     "sync:catalog": "node tools/sync-catalog.mjs",
     "build": "node tools/build-site.mjs",

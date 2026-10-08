@@ -54,7 +54,9 @@ Once all 12 shards have finished importing locally:
 npm run export:anna-index
 ```
 
-This makes a separate, consistent `data/anna-index/<snapshot>-<unique>/anna-index.sqlite` and checksum receipt. It does not upload anything or modify the live source. It refuses incomplete shard checkpoints, verifies SQLite integrity and requires enough disk for another database copy plus a 100 GiB reserve. Interrupted exports leave a partial copy, never a completed receipt. Keep the finalized index immutable. The complete selected snapshot is historical metadata, not a live view of all current Anna records or a guarantee of available book downloads.
+This first audits all 12 source gzip files read-only: zero skipped records, complete gzip/CRC reads, exact checkpoint counts, compressed-file SHA-256 receipts and matching database totals by book/comic type. That extra verification rereads the 167 GB source set and takes additional time. A partial progress audit is available with `npm run audit:anna -- --completed`; its receipt explicitly says it is partial. New acquisition runs refuse completion checkpoints if a selected shard skips any records.
+
+The export then makes a separate, consistent `data/anna-index/<snapshot>-<unique>/anna-index.sqlite` and checksum receipt. It does not upload anything or modify the live source. It refuses incomplete shard checkpoints, verifies SQLite integrity and requires enough disk for another database copy plus a 100 GiB reserve. Interrupted exports leave a partial copy, never a completed receipt. Keep the finalized index immutable. The complete selected snapshot is historical metadata, not a live view of all current Anna records or a guarantee of available book downloads.
 
 After that finalized file has been placed in your TorBox storage, connect the GitHub session and use **Settings → Full Anna metadata index (TorBox storage) → Load Anna index files from TorBox**. Select the SQLite index to connect it for this tab. Books/Comics Anna searches will then query the connected index; disconnecting returns them to the Pages snapshot and browser imports. The UI distinguishes complete selected snapshots from partial indexes.
 

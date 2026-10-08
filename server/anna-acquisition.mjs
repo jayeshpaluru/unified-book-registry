@@ -50,3 +50,11 @@ export function metadataFileReady(file, reported, downloadComplete = false) {
   // estimated per-file byte count to equal the exact compressed file length.
   return downloadComplete || Number(reported.completedLength) === file.size;
 }
+
+export function verifiedShardRecords(result) {
+  if (!result || !Number.isSafeInteger(result.imported) || result.imported < 0
+      || result.skipped !== 0) {
+    throw new Error('A selected metadata shard did not import every record. Its completion checkpoint must not be saved; review the unsupported records first.');
+  }
+  return result.imported;
+}

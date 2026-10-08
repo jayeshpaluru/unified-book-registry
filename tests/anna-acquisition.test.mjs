@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metadataPlan, verifyPieceResume, metadataFileReady } from '../server/anna-acquisition.mjs';
+import { metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 
 const info = () => ({ name: 'public-metadata', hash: 'a'.repeat(40), files: [
@@ -54,4 +54,19 @@ test('A complete selected torrent unblocks pinned shards when per-file piece cou
   assert.equal(metadataFileReady(file, { ...reported, selected: false }, true), false);
   assert.equal(metadataFileReady(file, { ...reported, index: '3' }, true), false);
   assert.equal(metadataFileReady(file, undefined, true), false);
+});
+
+test('Selected snapshot shards cannot receive completion checkpoints when records were skipped', () => {
+  const store = openAnnaStore();
+  try {
+    assert.equal(verifiedShardRecords({ imported: 42, skipped: 0 }), 42);
+    assert.equal(verifiedShardRecords({ imported: 0, skipped: 0 }), 0);
+    for (const result of [null, {}, { imported: 42 }, { imported: 42, skipped: 1 },
+      { imported: 42, skipped: -1 }, { imported: -1, skipped: 0 }, { imported: 2 ** 53, skipped: 0 }]) {
+      assert.throws(() => store.finishImport('incomplete', verifiedShardRecords(result)), /every record/);
+      assert.equal(store.completedImport('incomplete'), false);
+    }
+    store.finishImport('complete', verifiedShardRecords({ imported: 42, skipped: 0 }));
+    assert.equal(store.completedImport('complete'), true);
+  } finally { store.close(); }
 });

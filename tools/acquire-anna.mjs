@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { torrentInfo } from '../server/torrent-metadata.mjs';
-import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady } from '../server/anna-acquisition.mjs';
+import { ANNA_METADATA_TORRENT, ANNA_SNAPSHOT, metadataPlan, verifyPieceResume, metadataFileReady, verifiedShardRecords } from '../server/anna-acquisition.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
 import { importAnna } from '../server/import-anna.mjs';
 
@@ -138,7 +138,7 @@ async function run() {
             console.log(`Shard ${file.shard + 1}: ${progress.imported.toLocaleString()} imported; ${progress.total.toLocaleString()} catalog records.`);
           }
         } });
-        store.finishImport(key, result.imported); state.importedShards.push(file.shard); state.records = store.total();
+        store.finishImport(key, verifiedShardRecords(result)); state.importedShards.push(file.shard); state.records = store.total();
         delete state.currentShard; await save();
       }
     }
