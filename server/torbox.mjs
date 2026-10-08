@@ -58,3 +58,17 @@ export function metadataFiles(downloads) {
   ).map((file) => ({ kind: download.kind, id: download.id, fileId: file.id,
     name: file.name || file.path, size: Number(file.size) || 0, ready: Boolean(download.download_finished || download.download_present) })));
 }
+
+// Count-only discovery: never return account file names, IDs, URLs or upstream
+// errors. Optional collections may be unavailable on the account's plan.
+export async function inspectMetadataAvailability(client) {
+  const collections = await Promise.all([...KINDS].map(async (kind) => {
+    try {
+      const files = metadataFiles(await client.list(kind));
+      return { kind, status: 'checked', ready: files.filter((file) => file.ready).length };
+    } catch {
+      return { kind, status: 'unavailable', ready: null };
+    }
+  }));
+  return { ready: collections.reduce((total, collection) => total + (collection.ready || 0), 0), collections };
+}
