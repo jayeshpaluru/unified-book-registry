@@ -54,7 +54,7 @@ const browser = await browserSession({ intercept: async (request) => {
       ? { id: 77, kind: 'webdl', ready: true, name: 'Fixture comic', files: [{ id: 0, name: 'Fixture comic.cbz', size: comicBytes.length }] }
       : { id: 1, kind: 'torrents', ready: true, name: 'Private test library', files: [{ id: 0, name: 'Private test book.pdf', size: fileBytes.length }] }] };
     else if (inputs.path === 'torbox/download') data = { url: params.kind === 'webdl' ? 'https://cdn.example/fixture-comic.cbz' : 'https://cdn.example/private-test-book.pdf' };
-    else if (inputs.path === 'torbox/add-getcomics') { assert.equal(params.postId, '123'); assert.equal(params.expectedUrl, 'https://getcomics.org/dls/fixture'); data = { id: 77, kind: 'webdl' }; }
+    else if (inputs.path === 'torbox/add-getcomics') { assert.equal(params.postId, '123'); assert.equal(params.selectedUrl, 'https://getcomics.org/dls/fixture'); data = { id: 77, kind: 'webdl' }; }
     else if (/^(mangapill|weebcentral|mangakatana)\//.test(inputs.path)) {
       const provider = inputs.path.split('/')[0];
       if (inputs.path.endsWith('/search')) data = { items: [{ id: String(params.page || 1), title: `Live fixture page ${params.page || 1}`,

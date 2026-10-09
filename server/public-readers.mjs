@@ -1,4 +1,4 @@
-import { htmlText, htmlAttr, httpsUrl, mapGetComics } from '../js/sources/public-metadata.js';
+import { htmlText, htmlAttr, httpsUrl, mapGetComics, getComicsFileUrl } from '../js/sources/public-metadata.js';
 import { KATANA_ORIGIN, KATANA_SERIES_ID, KATANA_CHAPTER_ID, parseKatanaSeries, parseKatanaChapters, parseKatanaPages } from './mangakatana.mjs';
 
 export const READER_ORIGINS = { mangapill: 'https://mangapill.com', weebcentral: 'https://weebcentral.com', mangakatana: KATANA_ORIGIN };
@@ -138,18 +138,20 @@ function allowedFileUrl(value, base) {
   if (!href || !LINK_HOSTS.some((host) => new URL(href).hostname === host || new URL(href).hostname.endsWith(`.${host}`))) throw new Error('Unsupported comic file host.');
   return href;
 }
-export async function resolveGetComicsDownload(postId, index, { fetchImpl = fetch, expectedUrl } = {}) {
-  const post = await createPublicReaderClient({ fetchImpl }).getComicsPost(postId);
-  if (!Number.isSafeInteger(index) || index < 0 || index >= post.downloads.length) throw new Error('Invalid comic file selection.');
-  if (expectedUrl && expectedUrl !== post.downloads[index].url) throw new Error('The provider changed this archive link. Refresh the catalog before submitting it.');
-  let url = allowedFileUrl(post.downloads[index].url);
+export async function resolveGetComicsDownload(postId, index, { fetchImpl = fetch, selectedUrl } = {}) {
+  if (!/^[1-9]\d{0,11}$/.test(String(postId)) || !Number.isSafeInteger(index) || index < 0 || index >= 20) throw new Error('Invalid comic file selection.');
+  // The authenticated owner selects a public browser-feed link. Do not refetch
+  // WordPress from a runner it blocks, or pretend that the link proves provenance.
+  // Initial hosts/paths and every ordinary redirect are independently restricted.
+  let url = getComicsFileUrl(selectedUrl);
+  if (!url) throw new Error('Unsupported comic file selection. Refresh the catalog and choose a supported archive host.');
   // Follow only trusted public HEAD redirects. No comic bytes are fetched here.
   for (let count = 0; count < 6; count++) {
     const response = await fetchImpl(url, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(20000) });
     if ([301, 302, 303, 307, 308].includes(response.status)) { url = allowedFileUrl(response.headers.get('location'), url); continue; }
     if (!response.ok) throw new Error(`The comic file host returned HTTP ${response.status}.`);
     if (Number(response.headers.get('content-length')) > 1e12) throw new Error('This comic archive exceeds the supported TorBox file size.');
-    return { url, title: post.title, host: new URL(url).hostname };
+    return { url, host: new URL(url).hostname };
   }
   throw new Error('The comic file host returned too many redirects.');
 }

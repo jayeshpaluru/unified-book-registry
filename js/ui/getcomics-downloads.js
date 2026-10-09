@@ -31,7 +31,7 @@ export function getComicsDownloads(entry) {
       if (!hasGithubSession()) { state.textContent = 'Connect your GitHub Actions session in Settings first.'; return; }
       add.disabled = true; state.textContent = 'Resolving this archive host and submitting it to TorBox…';
       try {
-        const result = await githubJob('torbox/add-getcomics', { postId: entry.id, index, expectedUrl: download.url });
+        const result = await githubJob('torbox/add-getcomics', { postId: entry.id, index, selectedUrl: download.url });
         submission = result.id; check.hidden = false; add.textContent = 'Submitted to TorBox';
         state.textContent = 'Submitted. Check ready files to open the comic here.';
       } catch (error) { state.textContent = error.message; add.disabled = false; }

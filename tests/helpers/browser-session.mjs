@@ -22,11 +22,20 @@ export async function browserSession({ intercept } = {}) {
   await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
   let nextId = 0; const pending = new Map(), exceptions = [];
   const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
-    const id = ++nextId; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params, ...(sessionId && { sessionId }) }));
+    if (socket.readyState !== WebSocket.OPEN) { reject(new Error('The isolated browser connection closed.')); return; }
+    const id = ++nextId;
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Browser command timed out: ${method}`)); }, 45000);
+    pending.set(id, { resolve, reject, timer }); socket.send(JSON.stringify({ id, method, params, ...(sessionId && { sessionId }) }));
   });
+  const rejectPending = () => {
+    for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error('The isolated browser connection closed.')); }
+    pending.clear();
+  };
+  socket.addEventListener('close', rejectPending); socket.addEventListener('error', rejectPending);
   socket.addEventListener('message', async (event) => {
     const message = JSON.parse(event.data);
     if (message.id) { const task = pending.get(message.id); pending.delete(message.id);
+      clearTimeout(task?.timer);
       if (message.error) task?.reject(new Error(message.error.message)); else task?.resolve(message.result); }
     else if (message.method === 'Runtime.exceptionThrown') exceptions.push(message.params.exceptionDetails.text);
     else if (message.method === 'Fetch.requestPaused' && intercept) {
@@ -35,7 +44,7 @@ export async function browserSession({ intercept } = {}) {
         await send('Fetch.fulfillRequest', { requestId: message.params.requestId, responseCode: response.status || 200,
           responseHeaders: Object.entries(response.headers || {}).map(([name, value]) => ({ name, value })),
           body: Buffer.from(response.body || '').toString('base64') }, message.sessionId);
-      } catch (error) { exceptions.push(error.message); await send('Fetch.failRequest', { requestId: message.params.requestId, errorReason: 'Failed' }, message.sessionId); }
+      } catch (error) { exceptions.push(error.message); await send('Fetch.failRequest', { requestId: message.params.requestId, errorReason: 'Failed' }, message.sessionId).catch(() => {}); }
     }
   });
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
@@ -54,7 +63,19 @@ export async function browserSession({ intercept } = {}) {
     while (Date.now() < deadline) { if (await evaluate(expression)) return; await new Promise((resolve) => setTimeout(resolve, 100)); }
     throw new Error(`UI wait timed out: ${expression}\n${await evaluate('document.body.innerText')}`);
   }, async close() {
-    socket.close(); if (child.exitCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); }
+    socket.close(); rejectPending();
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit');
+      child.kill('SIGTERM');
+      let timer;
+      await Promise.race([exited, new Promise((resolve) => { timer = setTimeout(resolve, 5000); })]);
+      clearTimeout(timer);
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGKILL');
+        await Promise.race([exited, new Promise((resolve) => { timer = setTimeout(resolve, 5000); })]);
+        clearTimeout(timer);
+      }
+    }
     rmSync(profile, { recursive: true, force: true });
   } };
 }

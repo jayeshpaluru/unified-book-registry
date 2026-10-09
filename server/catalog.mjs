@@ -6,7 +6,7 @@ import { openAnnaStore } from './anna-store.mjs';
 import { importAnna } from './import-anna.mjs';
 import { parseComikey, parseWebtoon } from './public-catalogs.mjs';
 import { searchRecords } from '../js/sources/catalog-search.js';
-import { createPublicReaderClient } from './public-readers.mjs';
+import { createPublicReaderClient, resolveGetComicsDownload } from './public-readers.mjs';
 import { directSearch as getComicsSearch } from '../js/sources/getcomics.js';
 
 export const APP_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -91,6 +91,8 @@ export function createCatalogApi(store, { fetchImpl = fetch } = {}) {
     }
     if (path === 'mangadex/search') return upstream(mangaDexSearchUrl(text, number(params, 'offset', 0, 0, 9970)));
     if (path === 'getcomics/search') return getComicsSearch(text, number(params, 'offset', 0, 0, 1000000), { fetchImpl });
+    if (path === 'getcomics/resolve') return resolveGetComicsDownload(params.get('postId'),
+      number(params, 'index', 0, 0, 19), { fetchImpl, selectedUrl: params.get('selectedUrl') });
     const comicPost = /^getcomics\/post\/(\d+)$/.exec(path);
     if (comicPost) return readers.getComicsPost(comicPost[1]);
     const readerSearch = /^(mangapill|weebcentral|mangakatana)\/search$/.exec(path);

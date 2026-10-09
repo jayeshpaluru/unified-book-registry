@@ -5,23 +5,38 @@ import { webcrypto } from 'node:crypto';
 import { openSealedResult, to64 } from '../js/sources/github-jobs.js';
 import { mapPages as mangaDexPages } from '../js/sources/mangadex.js';
 import { KATANA_CHAPTER_ID } from '../server/mangakatana.mjs';
+import { mapGetComics, metadataJson, httpsUrl } from '../js/sources/public-metadata.js';
 const exec = promisify(execFile);
 const repo = 'jayeshpaluru/unified-book-registry';
 const publicOnly = process.argv.includes('--public');
 const providerPosition = process.argv.indexOf('--provider');
 const provider = providerPosition >= 0 ? process.argv[providerPosition + 1] : 'mangadex';
 const render = process.argv.includes('--render');
-if (!['mangadex', 'mangapill', 'weebcentral', 'mangakatana'].includes(provider) || (providerPosition >= 0 && !publicOnly)) {
+if (!['mangadex', 'mangapill', 'weebcentral', 'mangakatana', 'getcomics'].includes(provider) || (providerPosition >= 0 && !publicOnly)) {
   throw new Error('Provider checks require --public and a supported manga provider.');
 }
 const chapterPosition = process.argv.indexOf('--chapter');
 const chapterId = chapterPosition >= 0 ? process.argv[chapterPosition + 1] : null;
 const validChapter = provider === 'mangakatana' ? KATANA_CHAPTER_ID.test(chapterId) : provider === 'mangapill'
   ? /^\d{1,9}-\d{1,15}$/.test(chapterId) : provider === 'weebcentral' ? /^[0-9A-HJKMNP-TV-Z]{26}$/.test(chapterId) : /^[a-f\d]{8}-[a-f\d-]{27}$/.test(chapterId);
-if (chapterPosition >= 0 && (!publicOnly || !validChapter)) throw new Error('Chapter checks require --public and a valid provider chapter reference.');
+if (chapterPosition >= 0 && (!publicOnly || provider === 'getcomics' || !validChapter)) throw new Error('Chapter checks require --public and a valid provider chapter reference.');
 if (render && (!publicOnly || !chapterId)) throw new Error('Rendering requires --public and --chapter.');
-const requestPath = chapterId ? `${provider}/chapter/${chapterId}/pages` : publicOnly ? `${provider}/search` : 'torbox/list';
-const params = chapterId ? {} : publicOnly ? (provider === 'mangadex' ? { q: 'Yotsuba', offset: 0 } : { q: 'One Piece', page: 1 }) : { kind: 'torrents' };
+const comicPosition = process.argv.indexOf('--comic'), comicId = comicPosition >= 0 ? process.argv[comicPosition + 1] : null;
+const filePosition = process.argv.indexOf('--file-index'), fileIndex = filePosition >= 0 ? Number(process.argv[filePosition + 1]) : 0;
+if ((comicPosition >= 0 || filePosition >= 0 || provider === 'getcomics') && (!publicOnly || provider !== 'getcomics' ||
+  !/^[1-9]\d{0,11}$/.test(comicId) || !Number.isSafeInteger(fileIndex) || fileIndex < 0 || fileIndex >= 20 || chapterId || render)) {
+  throw new Error('Comic checks require --public --provider getcomics --comic POST_ID and an optional --file-index from 0 to 19.');
+}
+let requestPath = chapterId ? `${provider}/chapter/${chapterId}/pages` : publicOnly ? `${provider}/search` : 'torbox/list';
+let params = chapterId ? {} : publicOnly ? (provider === 'mangadex' ? { q: 'Yotsuba', offset: 0 } : { q: 'One Piece', page: 1 }) : { kind: 'torrents' };
+if (comicId) {
+  const response = await fetch(`https://getcomics.org/wp-json/wp/v2/posts/${comicId}?_fields=id,title,link,content`,
+    { credentials: 'omit', signal: AbortSignal.timeout(25000) });
+  if (!response.ok) throw new Error(`The normal public comic feed returned HTTP ${response.status}.`);
+  const entry = mapGetComics(await metadataJson(response)), choice = entry.downloads[fileIndex];
+  if (entry.id !== comicId || !choice) throw new Error('The public comic record did not contain that archive choice.');
+  requestPath = 'getcomics/resolve'; params = { postId: comicId, index: fileIndex, selectedUrl: choice.url };
+}
 const keys = await webcrypto.subtle.generateKey({ name: 'RSA-OAEP', modulusLength: 2048,
   publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, false, ['encrypt', 'decrypt']);
 const publicKey = to64(await webcrypto.subtle.exportKey('spki', keys.publicKey));
@@ -39,7 +54,10 @@ while (Date.now() < deadline) {
     const envelope = JSON.parse(Buffer.from(response.content, 'base64').toString());
     const result = await openSealedResult(envelope, keys.privateKey);
     if (result.requestId !== id || result.expiresAt < Date.now() || result.error) throw new Error(result.error || 'Response identity/expiry mismatch.');
-    if (chapterId) {
+    if (comicId) {
+      if (!httpsUrl(result.data.url) || new URL(result.data.url).hostname !== result.data.host) throw new Error('Invalid resolved public archive destination.');
+      console.log('Live GetComics link resolver passed: trusted HTTPS destination reached with HEAD requests only. No comic archive body or TorBox operation performed.');
+    } else if (chapterId) {
       const pages = provider === 'mangadex' ? mangaDexPages(result.data) : result.data.pages;
       if (!Array.isArray(pages) || !pages.length || pages.length > 2000) throw new Error('The public provider returned an invalid page manifest.');
       if (render) {

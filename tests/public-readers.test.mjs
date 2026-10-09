@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseReaderSeries, parseReaderChapters, parseReaderPages, createPublicReaderClient, resolveGetComicsDownload } from '../server/public-readers.mjs';
 import { directSearch } from '../js/sources/getcomics.js';
-import { getComicsDownloads, mapGetComics, httpsUrl, metadataJson } from '../js/sources/public-metadata.js';
+import { getComicsDownloads, getComicsFileUrl, mapGetComics, httpsUrl, metadataJson } from '../js/sources/public-metadata.js';
+import { createCatalogApi } from '../server/catalog.mjs';
 import { scanlationItem } from '../js/items.js';
 
 const seriesId = '01J76XY7E9FNDZ1DBBM6PBJPFK', chapterId = '01M3DVDYA933SQQ6703XQYMMGQ';
@@ -87,18 +88,52 @@ test('GetComics search filters non-archive posts but advances the original provi
   await assert.rejects(directSearch('', -1), /Invalid/);
   await assert.rejects(directSearch('', 0, { fetchImpl: async () => new Response('{}', { headers: { 'Content-Length': '9000000' } }) }), /size/);
 });
-test('Comic submission resolves only normal trusted HEAD redirects and never downloads archive bytes', async () => {
+test('Owner-selected public comic links resolve only normal trusted HEAD redirects, without refetching a runner-blocked feed', async () => {
   const calls = [], fetchImpl = async (url, init) => {
     calls.push({ url: String(url), method: init?.method || 'GET' });
-    if (String(url).includes('/wp-json/')) return new Response(JSON.stringify(comic));
     assert.equal(init.method, 'HEAD'); assert.equal(init.redirect, 'manual');
     if (String(url).includes('/dls/')) return new Response(null, { status: 302, headers: { Location: 'https://fs3.comicfiles.ru/file.cbz' } });
     return new Response(null, { headers: { 'Content-Length': '123456' } });
   };
-  const file = await resolveGetComicsDownload(123, 0, { fetchImpl, expectedUrl: comic.content.rendered.match(/href="([^"]+)/)[1].replace('http:', 'https:') });
-  assert.equal(file.url, 'https://fs3.comicfiles.ru/file.cbz'); assert.deepEqual(calls.map((c) => c.method), ['GET', 'HEAD', 'HEAD']);
-  await assert.rejects(resolveGetComicsDownload(123, 0, { fetchImpl, expectedUrl: 'https://getcomics.org/dls/changed' }), /changed/);
-  await assert.rejects(resolveGetComicsDownload(123, 20, { fetchImpl }), /selection/);
-  await assert.rejects(resolveGetComicsDownload(123, 0, { fetchImpl: async (url) => String(url).includes('/wp-json/')
-    ? new Response(JSON.stringify(comic)) : new Response(null, { status: 302, headers: { Location: 'https://127.0.0.1/private' } }) }), /Unsupported/);
+  const selectedUrl = 'https://getcomics.org/dls/public-link';
+  const file = await resolveGetComicsDownload(123, 0, { fetchImpl, selectedUrl });
+  assert.equal(file.url, 'https://fs3.comicfiles.ru/file.cbz'); assert.equal(file.host, 'fs3.comicfiles.ru');
+  assert.deepEqual(calls.map((c) => c.method), ['HEAD', 'HEAD']);
+  assert.equal(calls.some((c) => c.url.includes('/wp-json/')), false);
+  await assert.rejects(resolveGetComicsDownload(123, 20, { fetchImpl, selectedUrl }), /selection/);
+  await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () =>
+    new Response(null, { status: 302, headers: { Location: 'https://127.0.0.1/private' } }) }), /Unsupported/);
+  const api = createCatalogApi({}, { fetchImpl });
+  assert.equal((await api('getcomics/resolve', new URLSearchParams({ postId: '123', index: '0', selectedUrl }))).host, file.host);
+});
+test('Comic resolver rejects unsafe selections before fetching and fails closed on blocked, excessive or unsafe redirects', async () => {
+  let calls = 0;
+  const countFetch = async () => { calls++; return new Response(null); };
+  for (const selectedUrl of [undefined, '', 'http://getcomics.org/dls/a', 'https://getcomics.org/wp-json/private',
+    'https://getcomics.org/ad', 'https://evil.example/file.cbz', 'https://pixeldrain.com.evil.example/file',
+    'https://user:pass@pixeldrain.com/u/a', 'https://pixeldrain.com:8443/u/a', 'https://127.0.0.1/file',
+    'https://fs3.comicfiles.ru/file.cbz']) {
+    assert.equal(getComicsFileUrl(selectedUrl), null);
+    await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: countFetch }), /Unsupported/);
+  }
+  assert.equal(getComicsFileUrl('https://pixeldrain.com:443/u/a'), 'https://pixeldrain.com/u/a');
+  for (const [postId, index] of [[0, 0], ['01', 0], ['1234567890123', 0], [123, -1], [123, 20], [123, 0.5]]) {
+    await assert.rejects(resolveGetComicsDownload(postId, index, { selectedUrl: 'https://datanodes.to/public', fetchImpl: countFetch }), /Invalid/);
+  }
+  assert.equal(calls, 0);
+  const selectedUrl = 'https://getcomics.org/dls/public';
+  await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () => {
+    calls++; return new Response(null, { status: 403 });
+  } }), /HTTP 403/); assert.equal(calls, 1);
+  await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () =>
+    new Response(null, { headers: { 'Content-Length': '1000000000001' } }) }), /size/);
+  let redirects = 0;
+  await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () => {
+    redirects++; return new Response(null, { status: 302, headers: { Location: '/dls/loop' } });
+  } }), /too many redirects/); assert.equal(redirects, 6);
+  for (const location of ['http://comicfiles.ru/file.cbz', 'https://comicfiles.ru.evil.example/file.cbz',
+    'https://fs3.comicfiles.ru:8443/file.cbz', 'https://user:pass@comicfiles.ru/file.cbz']) {
+    await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () =>
+      new Response(null, { status: 302, headers: { Location: location } }) }), /Unsupported/);
+  }
 });

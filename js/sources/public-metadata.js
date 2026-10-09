@@ -35,6 +35,12 @@ export function httpsUrl(value, base) {
 const DOWNLOAD_LABELS = new Set(['DOWNLOAD NOW', 'MAIN SERVER', 'MEGA', 'MEDIAFIRE', 'PIXELDRAIN', 'VIKINGFILE', 'TERABOX', 'DATANODES', 'GOFILE']);
 const FILE_HOSTS = new Set(['getcomics.org', 'mega.nz', 'mediafire.com', 'www.mediafire.com', 'pixeldrain.com',
   'vikingfile.com', '1024terabox.com', 'terabox.com', 'www.terabox.com', 'datanodes.to', 'gofile.io']);
+export function getComicsFileUrl(value) {
+  const href = httpsUrl(value);
+  if (!href) return null;
+  const url = new URL(href);
+  return FILE_HOSTS.has(url.hostname) && (url.hostname !== 'getcomics.org' || url.pathname.startsWith('/dls/')) ? href : null;
+}
 export function getComicsDownloads(content) {
   const items = new Map();
   const html = String(content || '').replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
@@ -43,8 +49,8 @@ export function getComicsDownloads(content) {
     if (!DOWNLOAD_LABELS.has(label)) continue;
     let href = htmlAttr(match[1], 'href');
     if (href.startsWith('http://getcomics.org/')) href = href.replace(/^http:/, 'https:');
-    const url = httpsUrl(href, 'https://getcomics.org');
-    if (!url || !FILE_HOSTS.has(new URL(url).hostname) || (new URL(url).hostname === 'getcomics.org' && !new URL(url).pathname.startsWith('/dls/'))) continue;
+    const url = getComicsFileUrl(httpsUrl(href, 'https://getcomics.org'));
+    if (!url) continue;
     if (!items.has(url)) items.set(url, { label, url });
     if (items.size >= 20) break;
   }

@@ -43,12 +43,12 @@ async function execute() {
     if (path === 'torbox/download') return { url: await client.download(params.kind || 'torrents', params.id, params.fileId) };
     if (path === 'torbox/add-anna') return submitAnnaTorrent(client, params.torrentPath, params.expectedHash);
     if (path === 'torbox/add-getcomics') {
-      const file = await resolveGetComicsDownload(params.postId, Number(params.index), { expectedUrl: params.expectedUrl });
+      const file = await resolveGetComicsDownload(params.postId, Number(params.index), { selectedUrl: params.selectedUrl });
       return { id: await client.addWebDownload(file.url), kind: 'webdl' };
     }
     throw new Error('Unsupported TorBox operation.');
   }
-  if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases)|getcomics\/(?:search|post\/\d+)|(?:mangapill|weebcentral)\/(?:search|series\/[0-9A-Z]+\/chapters|chapter\/[0-9A-Z-]+\/pages)|mangakatana\/(?:search|series\/[a-z\d.-]+\/chapters|chapter\/[a-z\d.~:-]+\/pages))$/.test(path)) {
+  if (!/^(?:mangadex\/(?:search|manga\/[a-f\d-]+\/chapters|chapter\/[a-f\d-]+\/pages)|mangaupdates\/(?:search|series\/\d+\/releases)|getcomics\/(?:search|resolve|post\/\d+)|(?:mangapill|weebcentral)\/(?:search|series\/[0-9A-Z]+\/chapters|chapter\/[0-9A-Z-]+\/pages)|mangakatana\/(?:search|series\/[a-z\d.-]+\/chapters|chapter\/[a-z\d.~:-]+\/pages))$/.test(path)) {
     throw new Error('Unsupported live catalog operation.');
   }
   const store = openAnnaStore();
