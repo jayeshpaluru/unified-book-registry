@@ -22,7 +22,7 @@ test('TorBox list paging and metadata discovery do not confuse book files with m
 test('TorBox rejects links containing the API key and validates file references', async () => {
   const client = createTorboxClient('private-test-key', { fetchImpl: async () => new Response(JSON.stringify({ data:
     'https://cdn.example/book?token=private-test-key' })) });
-  await assert.rejects(client.download('torrents', 1, 0), /unsafe download/);
+  await assert.rejects(client.download('torrents', 1, 0), /unsafe download link containing the API key/);
   await assert.rejects(client.download('invalid', 1, 0), /Invalid TorBox/);
   await assert.rejects(client.download('torrents', -1, 0), /Invalid TorBox/);
 });

@@ -63,7 +63,10 @@ export function createTorboxClient(token, { fetchImpl = fetch } = {}) {
       try { url = new URL(link); } catch { throw new Error('TorBox returned an invalid download link.'); }
       let decoded;
       try { decoded = decodeURIComponent(url.href); } catch { throw new Error('TorBox returned an invalid download link.'); }
-      if (url.protocol !== 'https:' || url.username || url.password || decoded.includes(token) || url.hostname === 'api.torbox.app') {
+      if (decoded.includes(token)) {
+        throw new Error('TorBox returned an unsafe download link containing the API key. It was not sent to the browser.');
+      }
+      if (url.protocol !== 'https:' || url.username || url.password || url.hostname === 'api.torbox.app') {
         throw new Error('TorBox returned an unsafe download link.');
       }
       return url.href;
