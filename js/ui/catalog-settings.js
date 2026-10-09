@@ -93,7 +93,7 @@ export async function catalogSettings() {
     } }, h('label', { class: 'field' }, h('span', {}, 'GitHub repository'), repository),
     h('label', { class: 'field' }, h('span', {}, 'GitHub session token (not your TorBox key)'), token), signIn,
     h('button', { type: 'button', class: 'btn', onClick: () => { forgetGithubSession(); session.textContent = 'Session forgotten.'; token.value = ''; } }, 'Forget session')),
-    session, h('p', { class: 'muted' }, 'Actions requests usually take 20–60 seconds to start. Private results are encrypted for this browser session before being stored in the public repo.'),
+    session, h('p', { class: 'muted' }, 'Actions requests usually take 20–60 seconds to start. Private file lists and download links are encrypted for this browser session before being stored in the public repo. Encrypted response files expire, but their ciphertext may remain in Git history. Only this tab’s private key can decrypt them; neither plaintext nor your TorBox API key is published.'),
     h('p', { class: 'muted' }, `Workflow status is available in the Actions tab of ${DEFAULT_REPO}.`));
   section.append(annaIndexSettings(check));
   check();

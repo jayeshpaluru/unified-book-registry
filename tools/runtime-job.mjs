@@ -1,6 +1,6 @@
 import { createCatalogApi } from '../server/catalog.mjs';
 import { openAnnaStore } from '../server/anna-store.mjs';
-import { createTorboxClient } from '../server/torbox.mjs';
+import { createTorboxClient, probeTorboxDownload } from '../server/torbox.mjs';
 import { sealResult } from '../server/sealed-result.mjs';
 import { fetchAnnaTorrent, submitAnnaTorrent } from '../server/anna-downloads.mjs';
 import { resolveGetComicsDownload } from '../server/public-readers.mjs';
@@ -41,6 +41,7 @@ async function execute() {
         files: (entry.files || []).map((file) => ({ id: file.id, name: file.name || file.path, size: Number(file.size) || 0 })) })) };
     }
     if (path === 'torbox/download') return { url: await client.download(params.kind || 'torrents', params.id, params.fileId) };
+    if (path === 'torbox/link-probe') return probeTorboxDownload(client, params.kind || 'torrents');
     if (path === 'torbox/add-anna') return submitAnnaTorrent(client, params.torrentPath, params.expectedHash);
     if (path === 'torbox/add-getcomics') {
       const file = await resolveGetComicsDownload(params.postId, Number(params.index), { selectedUrl: params.selectedUrl });

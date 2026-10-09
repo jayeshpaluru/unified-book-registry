@@ -6,7 +6,7 @@ export function getComicsDownloads(entry) {
   const status = h('p', { class: 'muted', role: 'status' });
   const files = h('div', { class: 'menu' });
   const body = h('section', {}, h('h2', {}, 'Read through TorBox'),
-    h('p', { class: 'muted' }, 'Choose an archive host to add this comic to TorBox. Once ready, import and read its file here. Host availability and your account limits apply.'), status, files);
+    h('p', { class: 'muted' }, 'Choose an archive host to add this comic to TorBox. Once ready, import and read its file here. If a host rejects the check, try another listed host. Host availability and your account limits apply.'), status, files);
   if (!entry.downloads?.length) {
     body.append(h('p', { class: 'muted' }, 'This catalog entry does not include a supported archive link.'));
     return body;

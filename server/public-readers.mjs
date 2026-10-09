@@ -150,7 +150,7 @@ export async function resolveGetComicsDownload(postId, index, { fetchImpl = fetc
     const response = await fetchImpl(url, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(20000) });
     if ([301, 302, 303, 307, 308].includes(response.status)) { url = allowedFileUrl(response.headers.get('location'), url); continue; }
     if (!response.ok) throw new Error(`The comic file host returned HTTP ${response.status}.`);
-    if (Number(response.headers.get('content-length')) > 1e12) throw new Error('This comic archive exceeds the supported TorBox file size.');
+    if (Number(response.headers.get('content-length')) > 100_000_000_000) throw new Error('This comic archive exceeds TorBox’s 100 GB hoster download limit.');
     return { url, host: new URL(url).hostname };
   }
   throw new Error('The comic file host returned too many redirects.');

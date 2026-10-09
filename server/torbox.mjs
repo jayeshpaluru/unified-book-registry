@@ -78,6 +78,25 @@ export function metadataFiles(downloads) {
     name: file.name || file.path, size: Number(file.size) || 0, ready: Boolean(download.download_finished || download.download_present) })));
 }
 
+// Read-only diagnostic. Select the reference in Actions rather than including
+// private account IDs or names in public workflow-dispatch inputs.
+export async function probeTorboxDownload(client, kind = 'torrents') {
+  if (!KINDS.has(kind)) throw new Error('Invalid TorBox collection.');
+  const downloads = await client.list(kind);
+  const validId = (value) => (typeof value === 'number' || typeof value === 'string' && /^\d+$/.test(value)) &&
+    Number.isSafeInteger(Number(value)) && Number(value) >= 0;
+  for (const download of downloads) {
+    if (!validId(download.id) || download.download_present === false ||
+      !(download.download_present || download.download_finished)) continue;
+    for (const file of download.files || []) {
+      const fileSize = Number(file.size);
+      if (!validId(file.id) || !Number.isSafeInteger(fileSize) || fileSize < 4096) continue;
+      return { url: await client.download(kind, download.id, file.id), kind, fileSize };
+    }
+  }
+  throw new Error('No ready TorBox file is available for the read-only range check.');
+}
+
 // Count-only discovery: never return account file names, IDs, URLs or upstream
 // errors. Optional collections may be unavailable on the account's plan.
 export async function inspectMetadataAvailability(client) {

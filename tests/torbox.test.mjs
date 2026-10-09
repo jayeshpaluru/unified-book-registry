@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTorboxClient, metadataFiles, inspectMetadataAvailability } from '../server/torbox.mjs';
+import { createTorboxClient, metadataFiles, inspectMetadataAvailability, probeTorboxDownload } from '../server/torbox.mjs';
 
 test('TorBox API credentials stay server-side and are never echoed in errors', async () => {
   const client = createTorboxClient('private-test-key', { fetchImpl: async (url, init) => {
@@ -64,4 +64,31 @@ test('Failed collection checks report unknown availability rather than an empty 
   const result = await inspectMetadataAvailability({ list: async () => { throw new Error('private upstream error'); } });
   assert.equal(result.ready, 0);
   assert.ok(result.collections.every((collection) => collection.status === 'unavailable' && collection.ready === null));
+});
+
+test('Read-only link probe selects a ready file privately and returns no names or numeric references', async () => {
+  const calls = [];
+  const result = await probeTorboxDownload({
+    list: async (kind) => { calls.push(['list', kind]); return [
+      { id: 90, download_finished: true, download_present: false, files: [{ id: 0, size: 8192 }] },
+      { id: 91, download_finished: false, files: [{ id: 0, size: 8192 }] },
+      { id: 123, name: 'private-download-name', download_present: true, files: [
+        { id: 2, name: 'private-small-file', size: 100 }, { id: null, size: 8192 },
+        { id: 3, name: 'private-file-name', size: '8192' },
+      ] },
+    ]; },
+    download: async (...args) => { calls.push(['download', ...args]); return 'https://cdn.example/opaque-link'; },
+  }, 'webdl');
+  assert.deepEqual(calls, [['list', 'webdl'], ['download', 'webdl', 123, 3]]);
+  assert.deepEqual(result, { url: 'https://cdn.example/opaque-link', kind: 'webdl', fileSize: 8192 });
+  assert.doesNotMatch(JSON.stringify(result), /private|123|fileId|name/);
+});
+
+test('Read-only link probe fails safely on invalid collections and no usable files', async () => {
+  let calls = 0;
+  const client = { list: async () => { calls++; return []; }, download: async () => { assert.fail('No file should be requested.'); } };
+  await assert.rejects(probeTorboxDownload(client, 'invalid'), /Invalid TorBox collection/);
+  assert.equal(calls, 0);
+  await assert.rejects(probeTorboxDownload(client), /No ready TorBox file/);
+  assert.equal(calls, 1);
 });

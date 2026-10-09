@@ -126,7 +126,7 @@ test('Comic resolver rejects unsafe selections before fetching and fails closed 
     calls++; return new Response(null, { status: 403 });
   } }), /HTTP 403/); assert.equal(calls, 1);
   await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () =>
-    new Response(null, { headers: { 'Content-Length': '1000000000001' } }) }), /size/);
+    new Response(null, { headers: { 'Content-Length': '100000000001' } }) }), /100 GB/);
   let redirects = 0;
   await assert.rejects(resolveGetComicsDownload(123, 0, { selectedUrl, fetchImpl: async () => {
     redirects++; return new Response(null, { status: 302, headers: { Location: '/dls/loop' } });
