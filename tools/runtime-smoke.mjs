@@ -11,11 +11,13 @@ const exec = promisify(execFile);
 const repo = 'jayeshpaluru/unified-book-registry';
 const publicOnly = process.argv.includes('--public');
 const downloadLink = process.argv.includes('--download-link');
+const t3 = process.argv.includes('--t3');
 const kindPosition = process.argv.indexOf('--kind');
 const kind = kindPosition >= 0 ? process.argv[kindPosition + 1] : 'torrents';
 if ((downloadLink || kindPosition >= 0) && (publicOnly || !['torrents', 'webdl', 'usenet'].includes(kind))) {
   throw new Error('Private download-link checks require a supported --kind and cannot use --public.');
 }
+if (t3 && (!downloadLink || publicOnly || kindPosition >= 0)) throw new Error('T3 checks require --download-link --t3 without --public or --kind.');
 const providerPosition = process.argv.indexOf('--provider');
 const provider = providerPosition >= 0 ? process.argv[providerPosition + 1] : 'mangadex';
 const render = process.argv.includes('--render');
@@ -34,7 +36,7 @@ if ((comicPosition >= 0 || filePosition >= 0 || provider === 'getcomics') && (!p
   !/^[1-9]\d{0,11}$/.test(comicId) || !Number.isSafeInteger(fileIndex) || fileIndex < 0 || fileIndex >= 20 || chapterId || render)) {
   throw new Error('Comic checks require --public --provider getcomics --comic POST_ID and an optional --file-index from 0 to 19.');
 }
-let requestPath = chapterId ? `${provider}/chapter/${chapterId}/pages` : publicOnly ? `${provider}/search` : downloadLink ? 'torbox/link-probe' : 'torbox/list';
+let requestPath = chapterId ? `${provider}/chapter/${chapterId}/pages` : publicOnly ? `${provider}/search` : downloadLink ? t3 ? 'torbox/t3-link-probe' : 'torbox/link-probe' : 'torbox/list';
 let params = chapterId ? {} : publicOnly ? (provider === 'mangadex' ? { q: 'Yotsuba', offset: 0 } : { q: 'One Piece', page: 1 }) : { kind };
 if (comicId) {
   const response = await fetch(`https://getcomics.org/wp-json/wp/v2/posts/${comicId}?_fields=id,title,link,content`,
@@ -62,7 +64,7 @@ while (Date.now() < deadline) {
     const result = await openSealedResult(envelope, keys.privateKey);
     if (result.requestId !== id || result.expiresAt < Date.now() || result.error) throw new Error(result.error || 'Response identity/expiry mismatch.');
     if (downloadLink) {
-      if (!httpsUrl(result.data.url) || result.data.kind !== kind || !Number.isSafeInteger(result.data.fileSize) || result.data.fileSize < 4096) {
+      if (!httpsUrl(result.data.url) || result.data.kind !== (t3 ? 't3' : kind) || !Number.isSafeInteger(result.data.fileSize) || result.data.fileSize < 4096) {
         throw new Error('The private runtime returned an invalid range-check link.');
       }
       const { browserSession } = await import('../tests/helpers/browser-session.mjs');
@@ -74,7 +76,7 @@ while (Date.now() < deadline) {
         const proof = await browser.evaluate(`(${probeTorboxRange.toString()})(${JSON.stringify(result.data.url)},${result.data.fileSize})
           .then(proof=>({proof}),error=>({error:error.message}))`);
         if (proof.error) throw new Error(proof.error);
-        console.log(`Live TorBox temporary-link check passed from Pages: HTTP ${proof.proof.status}, ${proof.proof.bytes} bytes, exposed Content-Range and matching total size. Private names, links and content withheld. This tests an existing file, not the finalized Anna index.`);
+        console.log(`Live TorBox ${t3 ? 'T3 signed-link' : 'temporary-link'} check passed from Pages: HTTP ${proof.proof.status}, ${proof.proof.bytes} bytes, exposed Content-Range and matching total size. Private names, links and content withheld. This tests an existing file, not the finalized Anna index.`);
       } finally { await browser.close(); }
     } else if (comicId) {
       if (!httpsUrl(result.data.url) || new URL(result.data.url).hostname !== result.data.host) throw new Error('Invalid resolved public archive destination.');

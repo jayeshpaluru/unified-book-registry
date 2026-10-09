@@ -4,6 +4,7 @@ import { createTorboxClient, probeTorboxDownload } from '../server/torbox.mjs';
 import { sealResult } from '../server/sealed-result.mjs';
 import { fetchAnnaTorrent, submitAnnaTorrent } from '../server/anna-downloads.mjs';
 import { resolveGetComicsDownload } from '../server/public-readers.mjs';
+import { probeTorboxT3 } from '../server/torbox-t3.mjs';
 
 const requestId = process.env.REQUEST_ID || '';
 const publicKey = process.env.SESSION_PUBLIC_KEY || '';
@@ -42,6 +43,7 @@ async function execute() {
     }
     if (path === 'torbox/download') return { url: await client.download(params.kind || 'torrents', params.id, params.fileId) };
     if (path === 'torbox/link-probe') return probeTorboxDownload(client, params.kind || 'torrents');
+    if (path === 'torbox/t3-link-probe') return probeTorboxT3(client, process.env.TORBOX_API_KEY);
     if (path === 'torbox/add-anna') return submitAnnaTorrent(client, params.torrentPath, params.expectedHash);
     if (path === 'torbox/add-getcomics') {
       const file = await resolveGetComicsDownload(params.postId, Number(params.index), { selectedUrl: params.selectedUrl });
